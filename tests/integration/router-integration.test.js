@@ -6,7 +6,7 @@ describe('Router Integration Tests', () => {
   
   // Use the real MongoDB connection from the example config
   const config = {
-    mongoUris: ['mongodb+srv://ami2:FI897j20H5EY6Z3V@db-mongodb-ams3-sage0-d8bffabe.mongo.ondigitalocean.com/admin?replicaSet=db-mongodb-ams3-sage0&tls=true&authSource=admin'],
+    mongoUris: ['mongodb://localhost:27017'],
     spacesConns: [{
       endpoint: 'https://nyc3.digitaloceanspaces.com',
       region: 'nyc3',
