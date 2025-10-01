@@ -1,0 +1,42 @@
+{
+  "mongoUris": ["mongodb+srv://ami2:FI897j20H5EY6Z3V@db-mongodb-ams3-sage0-d8bffabe.mongo.ondigitalocean.com/admin?replicaSet=db-mongodb-ams3-sage0&tls=true&authSource=admin"],
+  "spacesConns": [
+    {
+      "endpoint": "https://nyc3.digitaloceanspaces.com",
+      "region": "nyc3",
+      "accessKey": "DOxxxxACCESS",
+      "secretKey": "DOxxxxSECRET",
+      "backupsBucket": "udm-backups-nyc3",
+      "jsonBucket": "udm-json-nyc3",
+      "contentBucket": "udm-content-nyc3",
+      "forcePathStyle": false
+    }
+  ],
+  "counters": {
+    "mongoUri": "mongodb+srv://ami2:FI897j20H5EY6Z3V@db-mongodb-ams3-sage0-d8bffabe.mongo.ondigitalocean.com/admin?replicaSet=db-mongodb-ams3-sage0&tls=true&authSource=admin",
+    "dbName": "udm_counters"
+  },
+  "routing": {
+    "hashAlgo": "rendezvous",
+    "chooseKey": "tenantId|dbName"
+  },
+  "retention": {
+    "ver": { "days": 45, "maxPerItem": 20 },
+    "counters": { "days": 365, "weeks": 104, "months": 48 }
+  },
+  "rollup": {
+    "enabled": true,
+    "manifestPeriod": "daily"
+  },
+  "collectionMaps": {
+    "documents": {
+      "indexedProps": ["clientId", "docType", "country"],
+      "base64Props": { "content": { "contentType": "application/pdf" } },
+      "validation": { "requiredIndexed": ["clientId", "docType"] }
+    },
+    "profiles": {
+      "indexedProps": ["customerId", "preferences.language", "preferences.notifications"],
+      "base64Props": { "avatar": { "contentType": "image/png" } }
+    }
+  }
+}

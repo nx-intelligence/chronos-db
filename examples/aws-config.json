@@ -1,0 +1,55 @@
+{
+  "mongoUris": [
+    "mongodb+srv://user:pass@cluster-a.mongodb.net",
+    "mongodb+srv://user:pass@cluster-b.mongodb.net"
+  ],
+  "spacesConns": [
+    {
+      "endpoint": "https://s3.us-east-1.amazonaws.com",
+      "region": "us-east-1",
+      "accessKey": "AKIA...",
+      "secretKey": "SECRET...",
+      "backupsBucket": "udm-backups-a",
+      "jsonBucket": "udm-json-a",
+      "contentBucket": "udm-content-a",
+      "forcePathStyle": false
+    },
+    {
+      "endpoint": "https://s3.eu-west-1.amazonaws.com",
+      "region": "eu-west-1",
+      "accessKey": "AKIA2...",
+      "secretKey": "SECRET2...",
+      "backupsBucket": "udm-backups-b",
+      "jsonBucket": "udm-json-b",
+      "contentBucket": "udm-content-b",
+      "forcePathStyle": false
+    }
+  ],
+  "counters": {
+    "mongoUri": "mongodb+srv://user:pass@cluster-metrics.mongodb.net",
+    "dbName": "udm_counters"
+  },
+  "routing": {
+    "hashAlgo": "rendezvous",
+    "chooseKey": "tenantId|dbName"
+  },
+  "retention": {
+    "ver": { "days": 60, "maxPerItem": 30 },
+    "counters": { "days": 365, "weeks": 260, "months": 120 }
+  },
+  "rollup": {
+    "enabled": true,
+    "manifestPeriod": "daily"
+  },
+  "collectionMaps": {
+    "kycDocuments": {
+      "indexedProps": ["clientId", "documentType", "issuedCountry"],
+      "base64Props": { "fileContent": { "contentType": "application/pdf" } },
+      "validation": { "requiredIndexed": ["clientId", "documentType"] }
+    },
+    "profiles": {
+      "indexedProps": ["customerId", "preferences.language", "preferences.notifications"],
+      "base64Props": { "avatar": { "contentType": "image/png" } }
+    }
+  }
+}

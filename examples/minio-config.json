@@ -1,0 +1,38 @@
+{
+  "mongoUris": ["mongodb://localhost:27017/udm"],
+  "spacesConns": [
+    {
+      "endpoint": "http://localhost:9000",
+      "region": "us-east-1",
+      "accessKey": "minioadmin",
+      "secretKey": "minioadmin",
+      "backupsBucket": "udm-backups",
+      "jsonBucket": "udm-json",
+      "contentBucket": "udm-content",
+      "forcePathStyle": true
+    }
+  ],
+  "counters": {
+    "mongoUri": "mongodb://localhost:27017/udm_counters",
+    "dbName": "udm_counters"
+  },
+  "routing": {
+    "hashAlgo": "rendezvous",
+    "chooseKey": "tenantId|dbName"
+  },
+  "retention": {
+    "ver": { "days": 30, "maxPerItem": 10 },
+    "counters": { "days": 90, "weeks": 26, "months": 12 }
+  },
+  "rollup": {
+    "enabled": true,
+    "manifestPeriod": "weekly"
+  },
+  "collectionMaps": {
+    "testDocuments": {
+      "indexedProps": ["testId", "category"],
+      "base64Props": { "data": { "contentType": "application/octet-stream" } },
+      "validation": { "requiredIndexed": ["testId"] }
+    }
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "name": "chronos",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Chronos - MongoDB-like persistence layer with time-travel versioning, S3/local storage, enrichment API, and lineage tracking. Works with MongoDB only or MongoDB + S3.",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "jest",
+    "test:unit": "jest tests/unit",
+    "test:integration": "jest tests/integration",
+    "lint": "eslint src/**/*.ts",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "chronos",
+    "mongodb",
+    "s3",
+    "storage",
+    "versioning",
+    "time-travel",
+    "data-management",
+    "typescript",
+    "lineage",
+    "enrichment"
+  ],
+  "author": "Sagente",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sagente/chronos.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sagente/chronos/issues"
+  },
+  "homepage": "https://github.com/sagente/chronos#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.450.0",
+    "@aws-sdk/s3-request-presigner": "^3.450.0",
+    "mongodb": "^6.3.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.28.4",
+    "@babel/preset-env": "^7.28.3",
+    "@types/jest": "^29.5.8",
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "babel-jest": "^30.2.0",
+    "eslint": "^8.54.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "tsup": "^7.2.0",
+    "typescript": "^5.3.0"
+  }
+}
