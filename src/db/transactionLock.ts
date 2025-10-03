@@ -1,6 +1,5 @@
-import { ObjectId, ClientSession, MongoClient } from 'mongodb';
+import { ObjectId, MongoClient } from 'mongodb';
 import { Repos } from './repos.js';
-import type { RouteContext } from '../config.js';
 
 // ============================================================================
 // Transaction Lock Types
@@ -15,23 +14,23 @@ export interface TransactionLock {
   lockedAt: Date;
   expiresAt: Date;
   serverId: string;
-  requestId?: string;
+  requestId?: string | undefined;
 }
 
 export interface LockOptions {
   /** Server/process identifier */
   serverId: string;
   /** Request ID for tracking */
-  requestId?: string;
+  requestId?: string | undefined;
   /** Lock timeout in milliseconds (default: 30000 = 30 seconds) */
   timeoutMs?: number;
 }
 
 export interface LockResult {
   success: boolean;
-  lockId?: string;
-  existingLock?: TransactionLock;
-  error?: string;
+  lockId?: string | undefined;
+  existingLock?: TransactionLock | undefined;
+  error?: string | undefined;
 }
 
 // ============================================================================
@@ -39,13 +38,11 @@ export interface LockResult {
 // ============================================================================
 
 export class TransactionLockManager {
-  private mongoClient: MongoClient;
   private dbName: string;
   private collection: string;
   private repos: Repos;
 
   constructor(mongoClient: MongoClient, dbName: string, collection: string) {
-    this.mongoClient = mongoClient;
     this.dbName = dbName;
     this.collection = collection;
     this.repos = new Repos(mongoClient.db(dbName), collection);
@@ -80,7 +77,7 @@ export class TransactionLockManager {
       lockedAt: now,
       expiresAt,
       serverId,
-      requestId,
+      ...(requestId && { requestId }),
     };
 
     try {
@@ -99,7 +96,7 @@ export class TransactionLockManager {
         
         return {
           success: false,
-          existingLock: existingLock || undefined,
+          ...(existingLock && { existingLock }),
           error: `Item ${itemId.toHexString()} is already locked by another transaction`,
         };
       }
