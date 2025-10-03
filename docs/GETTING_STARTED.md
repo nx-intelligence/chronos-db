@@ -130,8 +130,8 @@ const chronos = initUnifiedDataManager({
   spacesConns: [{
     endpoint: 'https://nyc3.digitaloceanspaces.com',
     region: 'nyc3',
-    accessKey: process.env.S3_ACCESS_KEY,
-    secretKey: process.env.S3_SECRET_KEY,
+    accessKey: 'YOUR_ACCESS_KEY',
+    secretKey: 'YOUR_SECRET_KEY',
     jsonBucket: 'chronos-json',
     contentBucket: 'chronos-content',
     backupsBucket: 'chronos-backups',

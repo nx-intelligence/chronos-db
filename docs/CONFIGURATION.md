@@ -401,8 +401,8 @@ writeOptimization: {
   spacesConns: [{
     endpoint: 'https://s3.amazonaws.com',
     region: 'us-east-1',
-    accessKey: process.env.S3_ACCESS_KEY,
-    secretKey: process.env.S3_SECRET_KEY,
+    accessKey: 'YOUR_ACCESS_KEY',
+    secretKey: 'YOUR_SECRET_KEY',
     jsonBucket: 'prod-chronos-json',
     contentBucket: 'prod-chronos-content',
     backupsBucket: 'prod-chronos-backups'
