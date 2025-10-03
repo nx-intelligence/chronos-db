@@ -1,6 +1,7 @@
 import { Db, Collection, ClientSession, ObjectId } from 'mongodb';
 import type { CollectionMap } from '../config.js';
 import type { HeadDoc, VerDoc, CounterDoc } from './schemas.js';
+import type { TransactionLock } from './transactionLock.js';
 import { getCollectionNames, getCollectionIndexes, createMetaQuery } from './schemas.js';
 
 // ============================================================================
@@ -12,6 +13,7 @@ export class Repos {
   private readonly headCol: Collection<HeadDoc>;
   private readonly verCol: Collection<VerDoc>;
   private readonly counterCol: Collection<CounterDoc>;
+  private readonly lockCol: Collection<TransactionLock>;
   private indexesEnsured = false;
 
   constructor(db: Db, collectionName: string) {
@@ -21,6 +23,7 @@ export class Repos {
     this.headCol = db.collection<HeadDoc>(names.head);
     this.verCol = db.collection<VerDoc>(names.ver);
     this.counterCol = db.collection<CounterDoc>(names.counter);
+    this.lockCol = db.collection<TransactionLock>(`${collectionName}_locks`);
   }
 
   /**
@@ -59,6 +62,9 @@ export class Repos {
       }
       await this.verCol.createIndex(index.key, options);
     }
+
+    // Ensure transaction lock indexes
+    await this.ensureTransactionLockIndexes();
 
     this.indexesEnsured = true;
   }
@@ -499,5 +505,105 @@ export class Repos {
       .find({ deletedAt: { $exists: true } })
       .limit(limit)
       .toArray();
+  }
+
+  // ============================================================================
+  // Transaction Lock Methods
+  // ============================================================================
+
+  /**
+   * Insert a transaction lock
+   * @param lock - Transaction lock document
+   */
+  async insertTransactionLock(lock: TransactionLock): Promise<void> {
+    await this.lockCol.insertOne(lock);
+  }
+
+  /**
+   * Get transaction lock by item ID
+   * @param itemId - Item ID
+   * @returns Transaction lock or null
+   */
+  async getTransactionLock(itemId: ObjectId): Promise<TransactionLock | null> {
+    return await this.lockCol.findOne({ itemId });
+  }
+
+  /**
+   * Get transaction locks by server ID
+   * @param serverId - Server ID
+   * @returns Array of transaction locks
+   */
+  async getTransactionLocksByServer(serverId: string): Promise<TransactionLock[]> {
+    return await this.lockCol.find({ serverId }).toArray();
+  }
+
+  /**
+   * Delete transaction lock by lock ID
+   * @param lockId - Lock ID
+   * @returns Delete result
+   */
+  async deleteTransactionLock(lockId: ObjectId): Promise<{ deletedCount: number }> {
+    const result = await this.lockCol.deleteOne({ _id: lockId });
+    return { deletedCount: result.deletedCount };
+  }
+
+  /**
+   * Delete transaction lock by item ID
+   * @param itemId - Item ID
+   * @returns Delete result
+   */
+  async deleteTransactionLockByItemId(itemId: ObjectId): Promise<{ deletedCount: number }> {
+    const result = await this.lockCol.deleteOne({ itemId });
+    return { deletedCount: result.deletedCount };
+  }
+
+  /**
+   * Delete transaction locks by server ID
+   * @param serverId - Server ID
+   * @returns Delete result
+   */
+  async deleteTransactionLocksByServer(serverId: string): Promise<{ deletedCount: number }> {
+    const result = await this.lockCol.deleteMany({ serverId });
+    return { deletedCount: result.deletedCount };
+  }
+
+  /**
+   * Delete expired transaction locks
+   * @returns Delete result
+   */
+  async deleteExpiredTransactionLocks(): Promise<{ deletedCount: number }> {
+    const result = await this.lockCol.deleteMany({ 
+      expiresAt: { $lt: new Date() } 
+    });
+    return { deletedCount: result.deletedCount };
+  }
+
+  /**
+   * Ensure transaction lock indexes
+   */
+  async ensureTransactionLockIndexes(): Promise<void> {
+    // Create unique index on itemId to prevent duplicate locks
+    await this.lockCol.createIndex(
+      { itemId: 1 },
+      { unique: true, name: 'itemId_unique' }
+    );
+
+    // Create index on expiresAt for cleanup queries
+    await this.lockCol.createIndex(
+      { expiresAt: 1 },
+      { name: 'expiresAt_ttl' }
+    );
+
+    // Create index on serverId for server-specific queries
+    await this.lockCol.createIndex(
+      { serverId: 1 },
+      { name: 'serverId_index' }
+    );
+
+    // Create compound index for cleanup by server and expiration
+    await this.lockCol.createIndex(
+      { serverId: 1, expiresAt: 1 },
+      { name: 'serverId_expiresAt_compound' }
+    );
   }
 }
