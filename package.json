@@ -1,5 +1,5 @@
 {
-  "name": "chronos",
+  "name": "chronos-db",
   "version": "1.0.0",
   "type": "module",
   "description": "Chronos - MongoDB-like persistence layer with time-travel versioning, S3/local storage, enrichment API, and lineage tracking. Works with MongoDB only or MongoDB + S3.",
@@ -41,16 +41,16 @@
     "lineage",
     "enrichment"
   ],
-  "author": "Sagente",
+  "author": "nx-morpheus",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sagente/chronos.git"
+    "url": "https://github.com/nx-morpheus/chronos.git"
   },
   "bugs": {
-    "url": "https://github.com/sagente/chronos/issues"
+    "url": "https://github.com/nx-morpheus/chronos/issues"
   },
-  "homepage": "https://github.com/sagente/chronos#readme",
+  "homepage": "https://github.com/nx-morpheus/chronos#readme",
   "engines": {
     "node": ">=18.0.0"
   },
