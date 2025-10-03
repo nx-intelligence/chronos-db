@@ -1,6 +1,6 @@
-# Unified Data Manager
+# Chronos DB
 
-> **S3-agnostic, cost-first & stability-first unified persistence layer for MongoDB + S3-compatible storage**
+> **S3-agnostic, cost-first & stability-first unified persistence layer for MongoDB + S3-compatible storage with transaction locking**
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]() 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)]()
@@ -11,12 +11,13 @@
 
 ## 📖 Overview
 
-`unified-data-manager` provides a production-ready persistence layer that combines:
+`chronos-db` provides a production-ready persistence layer that combines:
 
 - **MongoDB** for indexed metadata, head pointers, and bounded recent version index
 - **S3-compatible storage** for authoritative payloads, full JSON per version
 - **Automatic versioning** with explicit restore capabilities
 - **Multi-backend routing** with connection pooling
+- **Transaction locking** for concurrent write prevention across multiple servers
 - **Cheap analytics** with conditional counters
 - **Enrichment API** for incremental updates
 - **Fallback queues** for guaranteed durability
@@ -27,6 +28,7 @@
 ✅ **No Environment Variables** - All configuration via JSON  
 ✅ **Cost-First** - Minimize storage and compute costs  
 ✅ **Stability-First** - Immutable versioning, transactions, optimistic locking  
+✅ **Concurrent-Safe** - Transaction locking prevents multi-server write conflicts  
 ✅ **Portable** - Works with any S3-compatible provider  
 ✅ **Type-Safe** - Full TypeScript support with Zod validation  
 
@@ -37,13 +39,13 @@
 ### Installation
 
 ```bash
-npm install unified-data-manager
+npm install chronos-db
 ```
 
 ### Basic Usage
 
 ```typescript
-import { initUnifiedDataManager } from 'unified-data-manager';
+import { initUnifiedDataManager } from 'chronos-db';
 
 const udm = initUnifiedDataManager({
   mongoUris: ['mongodb://localhost:27017'],
@@ -52,13 +54,13 @@ const udm = initUnifiedDataManager({
     region: 'nyc3',
     accessKey: 'YOUR_ACCESS_KEY',
     secretKey: 'YOUR_SECRET_KEY',
-    backupsBucket: 'udm-backups',
-    jsonBucket: 'udm-json',
-    contentBucket: 'udm-content',
+    backupsBucket: 'chronos-backups',
+    jsonBucket: 'chronos-json',
+    contentBucket: 'chronos-content',
   }],
   counters: {
     mongoUri: 'mongodb://localhost:27017',
-    dbName: 'udm_counters',
+    dbName: 'chronos_counters',
   },
   routing: {
     hashAlgo: 'rendezvous',
@@ -255,7 +257,7 @@ const config = {
     maxAttempts: 10,
     baseDelayMs: 2000,
     maxDelayMs: 60000,
-    deadLetterCollection: 'udm_fallback_dead',
+    deadLetterCollection: 'chronos_fallback_dead',
   },
 };
 
@@ -279,7 +281,37 @@ await udm.fallback?.stopWorker();
 
 ---
 
-### 7. **Write Optimization**
+### 7. **Transaction Locking**
+
+Prevent concurrent writes across multiple servers:
+
+```typescript
+// Automatic transaction locking on all write operations
+// No additional configuration needed - works out of the box
+
+// Create operation - automatically acquires lock on item
+const result = await ops.create(data, 'actor', 'reason');
+
+// Update operation - automatically acquires lock on item
+await ops.update(id, newData, expectedOv, 'actor', 'reason');
+
+// Delete operation - automatically acquires lock on item
+await ops.delete(id, expectedOv, 'actor', 'reason');
+
+// Locks are automatically released after operation completes
+// If operation fails, locks are cleaned up automatically
+// Expired locks (30s timeout) are cleaned up periodically
+```
+
+**How it works:**
+- Each write operation acquires an exclusive lock on the item
+- Locks are stored in MongoDB with automatic expiration
+- Multiple servers can run simultaneously without conflicts
+- Failed transactions are automatically recovered via queue system
+
+---
+
+### 8. **Write Optimization**
 
 Reduce I/O overhead under load:
 
@@ -335,9 +367,10 @@ console.log('Counter queue:', stats.counterQueueSize);
 - **`<collection>_head`** - Latest state pointers
 - **`<collection>_ver`** - Immutable version index
 - **`<collection>_counter`** - Collection version counter
+- **`<collection>_locks`** - Transaction locks for concurrent write prevention
 - **`cnt_total`** - Counter totals (in separate DB)
-- **`udm_fallback_ops`** - Fallback queue (if enabled)
-- **`udm_fallback_dead`** - Dead letter queue (if enabled)
+- **`chronos_fallback_ops`** - Fallback queue (if enabled)
+- **`chronos_fallback_dead`** - Dead letter queue (if enabled)
 
 ### S3 Storage Layout
 
@@ -408,40 +441,19 @@ Tested with:
 
 ---
 
-## 🧪 Testing
-
-```bash
-# Build
-npm run build
-
-# Run tests
-npm test
-
-# Unit tests only
-npm run test:unit
-
-# Integration tests only
-npm run test:integration
-
-# Type check
-npm run type-check
-```
-
----
-
 ## 🤝 Contributing
 
 Contributions welcome! Please ensure:
 
 1. TypeScript compilation passes
-2. Tests are added for new features
-3. Documentation is updated
+2. Documentation is updated
+3. Changes are backward compatible
 
 ---
 
 ## 📄 License
 
-MIT © Sagente
+MIT © nx-intelligence
 
 ---
 
