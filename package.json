@@ -41,16 +41,16 @@
     "lineage",
     "enrichment"
   ],
-  "author": "nx-morpheus",
+  "author": "nx-intelligence",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nx-morpheus/chronos.git"
+    "url": "https://github.com/nx-intelligence/chronos-db.git"
   },
   "bugs": {
-    "url": "https://github.com/nx-morpheus/chronos/issues"
+    "url": "https://github.com/nx-intelligence/chronos-db/issues"
   },
-  "homepage": "https://github.com/nx-morpheus/chronos#readme",
+  "homepage": "https://github.com/nx-intelligence/chronos-db#readme",
   "engines": {
     "node": ">=18.0.0"
   },
