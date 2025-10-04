@@ -430,9 +430,18 @@ const udmConfigSchema = z.object({
       };
     }
     
+    // Only return S3 matching error if we're actually using S3
+    if (hasSpacesConns && config.spacesConns && config.spacesConns.length !== config.mongoUris.length) {
+      return {
+        message: `Number of MongoDB URIs (${config.mongoUris.length}) must match number of S3 connections (${config.spacesConns.length})`,
+        path: ['mongoUris', 'spacesConns'],
+      };
+    }
+    
+    // If we get here, validation should pass
     return {
-      message: `Number of MongoDB URIs (${config.mongoUris.length}) must match number of S3 connections (${config.spacesConns?.length || 0})`,
-      path: ['mongoUris', 'spacesConns'],
+      message: 'Configuration validation failed',
+      path: [],
     };
   }
 );
