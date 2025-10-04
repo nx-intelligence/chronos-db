@@ -36,3 +36,10 @@ yarn-error.log*
 # Test artifacts
 .jest-cache/
 
+# Client-specific documentation (should not be committed)
+docs/client-specific/
+docs/*-specific/
+docs/*_specific/
+*client-specific*
+*specific-client*
+

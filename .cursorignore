@@ -1,0 +1,28 @@
+# Build outputs
+dist/
+
+# Dependencies
+node_modules/
+
+# Test coverage
+coverage/
+
+# Logs
+*.log
+
+# Environment files
+.env*
+
+# Local storage
+.udm-storage/
+
+# Client-specific documentation (should not be committed)
+docs/client-specific/
+docs/*-specific/
+docs/*_specific/
+*client-specific*
+*specific-client*
+
+# Temporary files
+*.tmp
+*.temp

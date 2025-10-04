@@ -404,23 +404,32 @@ const udmConfigSchema = z.object({
   writeOptimization: writeOptimizationConfigSchema.optional(),
 }).refine(
   (config) => {
-    // Must have either spacesConns or localStorage
-    if (!config.spacesConns && !config.localStorage) {
+    // Must have either spacesConns (with connections) or localStorage
+    const hasSpacesConns = config.spacesConns && config.spacesConns.length > 0;
+    const hasLocalStorage = config.localStorage && config.localStorage.enabled;
+    
+    if (!hasSpacesConns && !hasLocalStorage) {
       return false;
     }
+    
     // If using spacesConns, must match mongoUris length
-    if (config.spacesConns && config.spacesConns.length !== config.mongoUris.length) {
+    if (hasSpacesConns && config.spacesConns && config.spacesConns.length !== config.mongoUris.length) {
       return false;
     }
+    
     return true;
   },
   (config) => {
-    if (!config.spacesConns && !config.localStorage) {
+    const hasSpacesConns = config.spacesConns && config.spacesConns.length > 0;
+    const hasLocalStorage = config.localStorage && config.localStorage.enabled;
+    
+    if (!hasSpacesConns && !hasLocalStorage) {
       return {
-        message: 'Must provide either spacesConns (S3) or localStorage configuration',
+        message: 'Must provide either spacesConns (S3) with at least one connection or localStorage configuration',
         path: ['spacesConns', 'localStorage'],
       };
     }
+    
     return {
       message: `Number of MongoDB URIs (${config.mongoUris.length}) must match number of S3 connections (${config.spacesConns?.length || 0})`,
       path: ['mongoUris', 'spacesConns'],
