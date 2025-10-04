@@ -28,10 +28,10 @@ export interface UdmConfig {
   counters: CountersConfig;
   /** How to route requests across backends */
   routing: RoutingConfig;
-  /** Retention policies for versions and counters */
-  retention: RetentionConfig;
-  /** Roll-up configuration for moving old data to manifests */
-  rollup: RollupConfig;
+  /** Retention policies for versions and counters (optional, defaults to disabled) */
+  retention?: RetentionConfig | undefined;
+  /** Roll-up configuration for moving old data to manifests (optional, defaults to disabled) */
+  rollup?: RollupConfig | undefined;
   /** Collection definitions with indexing and externalization rules */
   collectionMaps: Record<string, CollectionMap>;
   /** Optional counter rules for conditional totals */
@@ -92,32 +92,48 @@ export interface RoutingConfig {
  * Retention configuration for data lifecycle management
  */
 export interface RetentionConfig {
+  /** Whether retention is enabled (default: false) */
+  enabled?: boolean | undefined;
   /** Version retention settings */
-  ver: {
-    /** Keep versions for this many days */
+  ver?: {
+    /** Whether version retention is enabled (default: false) */
+    enabled?: boolean | undefined;
+    /** Keep versions for this many days (default: 90) */
+    maxAge?: number | undefined;
+    /** Maximum versions to keep per item (default: 10) */
+    maxVersions?: number | undefined;
+    /** @deprecated Use maxAge instead */
     days?: number | undefined;
-    /** Maximum versions to keep per item */
+    /** @deprecated Use maxVersions instead */
     maxPerItem?: number | undefined;
-  };
+  } | undefined;
   /** Counter retention settings */
-  counters: {
-    /** Daily counter documents to retain */
-    days: number;
-    /** Weekly counter documents to retain */
-    weeks: number;
-    /** Monthly counter documents to retain */
-    months: number;
-  };
+  counters?: {
+    /** Whether counter retention is enabled (default: false) */
+    enabled?: boolean | undefined;
+    /** Daily counter documents to retain (default: 365) */
+    maxAge?: number | undefined;
+    /** Maximum counter versions to keep (default: 50) */
+    maxVersions?: number | undefined;
+    /** @deprecated Use maxAge instead */
+    days?: number | undefined;
+    /** @deprecated Use maxVersions instead */
+    weeks?: number | undefined;
+    /** @deprecated Use maxVersions instead */
+    months?: number | undefined;
+  } | undefined;
 }
 
 /**
  * Roll-up configuration for moving old data to S3 manifests
  */
 export interface RollupConfig {
-  /** Whether roll-up is enabled */
-  enabled: boolean;
-  /** How often to create manifests */
-  manifestPeriod: 'daily' | 'weekly' | 'monthly';
+  /** Whether roll-up is enabled (default: false) */
+  enabled?: boolean | undefined;
+  /** How often to create manifests (default: 'daily') */
+  manifestPeriod?: 'daily' | 'weekly' | 'monthly' | undefined;
+  /** Whether to automatically handle daily/weekly/monthly operations (default: true) */
+  autoSchedule?: boolean | undefined;
 }
 
 /**
@@ -286,23 +302,33 @@ const routingConfigSchema = z.object({
 });
 
 const retentionConfigSchema = z.object({
+  enabled: z.boolean().optional(),
   ver: z.object({
+    enabled: z.boolean().optional(),
+    maxAge: z.number().int().positive().optional(),
+    maxVersions: z.number().int().positive().optional(),
+    // Deprecated fields for backward compatibility
     days: z.number().int().positive().optional(),
     maxPerItem: z.number().int().positive().optional(),
-  }),
+  }).optional(),
   counters: z.object({
-    days: z.number().int().positive('Counters days retention must be positive'),
-    weeks: z.number().int().positive('Counters weeks retention must be positive'),
-    months: z.number().int().positive('Counters months retention must be positive'),
-  }),
-});
+    enabled: z.boolean().optional(),
+    maxAge: z.number().int().positive().optional(),
+    maxVersions: z.number().int().positive().optional(),
+    // Deprecated fields for backward compatibility
+    days: z.number().int().positive().optional(),
+    weeks: z.number().int().positive().optional(),
+    months: z.number().int().positive().optional(),
+  }).optional(),
+}).optional();
 
 const rollupConfigSchema = z.object({
-  enabled: z.boolean(),
+  enabled: z.boolean().optional(),
   manifestPeriod: z.enum(['daily', 'weekly', 'monthly'], {
     errorMap: () => ({ message: 'Manifest period must be "daily", "weekly", or "monthly"' }),
-  }),
-});
+  }).optional(),
+  autoSchedule: z.boolean().optional(),
+}).optional();
 
 const collectionMapSchema = z.object({
   indexedProps: z.array(z.string()).min(1, 'At least one indexed property is required'),
@@ -409,11 +435,12 @@ const udmConfigSchema = z.object({
 /**
  * Validates a UDM configuration object
  * @param config - Configuration object to validate
- * @returns Validated configuration
+ * @returns Validated configuration with defaults applied
  * @throws ZodError if validation fails
  */
 export function validateUdmConfig(config: unknown): UdmConfig {
-  return udmConfigSchema.parse(config);
+  const validated = udmConfigSchema.parse(config);
+  return resolveConfigDefaults(validated);
 }
 
 /**
@@ -430,7 +457,7 @@ export function safeValidateUdmConfig(config: unknown): {
 } {
   const result = udmConfigSchema.safeParse(config);
   if (result.success) {
-    return { success: true, data: result.data };
+    return { success: true, data: resolveConfigDefaults(result.data) };
   } else {
     return { success: false, error: result.error };
   }
@@ -463,17 +490,19 @@ export function isSpacesConnConfig(obj: unknown): obj is SpacesConnConfig {
 // ============================================================================
 
 /**
- * Default retention configuration
+ * Default retention configuration (disabled by default)
  */
 export const DEFAULT_RETENTION: RetentionConfig = {
+  enabled: false,
   ver: {
-    days: 60,
-    maxPerItem: 30,
+    enabled: false,
+    maxAge: 90,
+    maxVersions: 10,
   },
   counters: {
-    days: 365,
-    weeks: 104,
-    months: 48,
+    enabled: false,
+    maxAge: 365,
+    maxVersions: 50,
   },
 };
 
@@ -486,9 +515,55 @@ export const DEFAULT_ROUTING: RoutingConfig = {
 };
 
 /**
- * Default rollup configuration
+ * Default rollup configuration (disabled by default)
  */
 export const DEFAULT_ROLLUP: RollupConfig = {
-  enabled: true,
+  enabled: false,
   manifestPeriod: 'daily',
+  autoSchedule: true,
 };
+
+// ============================================================================
+// Configuration Resolution Functions
+// ============================================================================
+
+/**
+ * Resolves configuration defaults for retention policies
+ */
+export function resolveRetentionDefaults(config?: RetentionConfig): RetentionConfig {
+  return {
+    enabled: config?.enabled ?? DEFAULT_RETENTION.enabled,
+    ver: {
+      enabled: config?.ver?.enabled ?? DEFAULT_RETENTION.ver?.enabled,
+      maxAge: config?.ver?.maxAge ?? config?.ver?.days ?? DEFAULT_RETENTION.ver?.maxAge,
+      maxVersions: config?.ver?.maxVersions ?? config?.ver?.maxPerItem ?? DEFAULT_RETENTION.ver?.maxVersions,
+    },
+    counters: {
+      enabled: config?.counters?.enabled ?? DEFAULT_RETENTION.counters?.enabled,
+      maxAge: config?.counters?.maxAge ?? config?.counters?.days ?? DEFAULT_RETENTION.counters?.maxAge,
+      maxVersions: config?.counters?.maxVersions ?? DEFAULT_RETENTION.counters?.maxVersions,
+    },
+  };
+}
+
+/**
+ * Resolves configuration defaults for rollup policies
+ */
+export function resolveRollupDefaults(config?: RollupConfig): RollupConfig {
+  return {
+    enabled: config?.enabled ?? DEFAULT_ROLLUP.enabled,
+    manifestPeriod: config?.manifestPeriod ?? DEFAULT_ROLLUP.manifestPeriod,
+    autoSchedule: config?.autoSchedule ?? DEFAULT_ROLLUP.autoSchedule,
+  };
+}
+
+/**
+ * Resolves complete configuration with defaults applied
+ */
+export function resolveConfigDefaults(config: Partial<UdmConfig>): UdmConfig {
+  return {
+    ...config,
+    retention: resolveRetentionDefaults(config.retention),
+    rollup: resolveRollupDefaults(config.rollup),
+  } as UdmConfig;
+}
