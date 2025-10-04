@@ -1,4 +1,4 @@
-import { promises as fs } from 'fs';
+import { promises as fs, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { createHash } from 'crypto';
 import type { StorageAdapter } from './interface.js';
@@ -19,6 +19,51 @@ export class LocalStorageAdapter implements StorageAdapter {
 
   constructor(basePath: string) {
     this.basePath = basePath;
+    // Ensure base directory and standard subfolders exist on initialization (synchronously)
+    this.initializeDirectoriesSync();
+  }
+
+  /**
+   * Initialize base directory and standard subfolders (synchronous)
+   */
+  private initializeDirectoriesSync(): void {
+    // Create base directory
+    this.ensureDirSync(this.basePath);
+    
+    // Create standard subfolders
+    this.ensureDirSync(join(this.basePath, 'chronos'));
+    this.ensureDirSync(join(this.basePath, 'chronos', 'backups'));
+    this.ensureDirSync(join(this.basePath, 'chronos', 'json'));
+    this.ensureDirSync(join(this.basePath, 'chronos', 'content'));
+    this.ensureDirSync(join(this.basePath, 'manifests'));
+    this.ensureDirSync(join(this.basePath, 'snapshots'));
+  }
+
+  /**
+   * Initialize base directory and standard subfolders
+   */
+  private async initializeDirectories(): Promise<void> {
+    // Create base directory
+    await this.ensureDir(this.basePath);
+    
+    // Create standard subfolders
+    await this.ensureDir(join(this.basePath, 'chronos'));
+    await this.ensureDir(join(this.basePath, 'chronos', 'backups'));
+    await this.ensureDir(join(this.basePath, 'chronos', 'json'));
+    await this.ensureDir(join(this.basePath, 'chronos', 'content'));
+    await this.ensureDir(join(this.basePath, 'manifests'));
+    await this.ensureDir(join(this.basePath, 'snapshots'));
+  }
+
+  /**
+   * Ensure directory exists (synchronous)
+   */
+  private ensureDirSync(dir: string): void {
+    try {
+      mkdirSync(dir, { recursive: true });
+    } catch (error) {
+      // Ignore if already exists
+    }
   }
 
   /**

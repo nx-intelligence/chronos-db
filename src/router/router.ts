@@ -91,13 +91,16 @@ export class BridgeRouter {
       throw new Error('Maximum 10 MongoDB URIs allowed');
     }
     
-    // Must have either spacesConns or localStorage
-    if (!args.spacesConns && !args.localStorage?.enabled) {
-      throw new Error('Must provide either spacesConns (S3) or localStorage configuration');
+    // Must have either spacesConns (with connections) or localStorage
+    const hasSpacesConns = args.spacesConns && args.spacesConns.length > 0;
+    const hasLocalStorage = args.localStorage && args.localStorage.enabled;
+    
+    if (!hasSpacesConns && !hasLocalStorage) {
+      throw new Error('Must provide either spacesConns (S3) with at least one connection or localStorage configuration');
     }
     
     // If using S3, validate connections
-    if (args.spacesConns) {
+    if (hasSpacesConns && args.spacesConns) {
       if (args.spacesConns.length > 10) {
         throw new Error('Maximum 10 S3 connections allowed');
       }
