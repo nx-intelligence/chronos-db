@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isReplicaSetAvailable } from './utils/replicaSet.js';
 
 // ============================================================================
 // TypeScript Interfaces
@@ -44,6 +45,8 @@ export interface UdmConfig {
   fallback?: FallbackConfig | undefined;
   /** Write optimization configuration */
   writeOptimization?: WriteOptimizationConfig | undefined;
+  /** Transaction configuration */
+  transactions?: TransactionConfig | undefined;
 }
 
 /**
@@ -235,6 +238,16 @@ export interface FallbackConfig {
 }
 
 /**
+ * Transaction configuration
+ */
+export interface TransactionConfig {
+  /** Whether to enable MongoDB transactions (default: true) */
+  enabled?: boolean | undefined;
+  /** Whether to automatically detect replica set support (default: true) */
+  autoDetect?: boolean | undefined;
+}
+
+/**
  * Write optimization configuration
  */
 export interface WriteOptimizationConfig {
@@ -368,6 +381,11 @@ const fallbackConfigSchema = z.object({
   deadLetterCollection: z.string().min(1, 'Dead letter collection name is required'),
 });
 
+const transactionConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+  autoDetect: z.boolean().optional(),
+}).optional();
+
 const writeOptimizationConfigSchema = z.object({
   batchS3: z.boolean(),
   batchWindowMs: z.number().int().positive('Batch window must be positive'),
@@ -402,6 +420,7 @@ const udmConfigSchema = z.object({
   hardDeleteEnabled: z.boolean().optional(),
   fallback: fallbackConfigSchema.optional(),
   writeOptimization: writeOptimizationConfigSchema.optional(),
+  transactions: transactionConfigSchema,
 }).refine(
   (config) => {
     // Must have either spacesConns (with connections) or localStorage
@@ -456,6 +475,31 @@ const udmConfigSchema = z.object({
  * @returns Validated configuration with defaults applied
  * @throws ZodError if validation fails
  */
+/**
+ * Validates transaction configuration against MongoDB capabilities
+ * @param config - Configuration to validate
+ * @throws Error if transaction configuration is invalid
+ */
+export async function validateTransactionConfig(config: Partial<UdmConfig>): Promise<void> {
+  if (config.transactions?.enabled === true) {
+    // Check if MongoDB supports transactions
+    const mongoUri = config.mongoUris?.[0];
+    if (!mongoUri) {
+      throw new Error('No MongoDB URI available for transaction validation');
+    }
+    
+    const hasReplicaSet = await isReplicaSetAvailable(mongoUri);
+    
+    if (!hasReplicaSet && config.transactions.autoDetect !== false) {
+      throw new Error(
+        'chronos-db: Transactions are enabled but MongoDB is not configured as a replica set. ' +
+        'Either disable transactions by setting "transactions.enabled: false" or configure MongoDB as a replica set. ' +
+        'See: https://docs.mongodb.com/manual/replication/'
+      );
+    }
+  }
+}
+
 export function validateUdmConfig(config: unknown): UdmConfig {
   const validated = udmConfigSchema.parse(config);
   return resolveConfigDefaults(validated);
@@ -541,6 +585,14 @@ export const DEFAULT_ROLLUP: RollupConfig = {
   autoSchedule: true,
 };
 
+/**
+ * Default transaction configuration (enabled by default)
+ */
+export const DEFAULT_TRANSACTIONS: TransactionConfig = {
+  enabled: true,
+  autoDetect: true,
+};
+
 // ============================================================================
 // Configuration Resolution Functions
 // ============================================================================
@@ -576,6 +628,16 @@ export function resolveRollupDefaults(config?: RollupConfig): RollupConfig {
 }
 
 /**
+ * Resolves configuration defaults for transaction policies
+ */
+export function resolveTransactionDefaults(config?: TransactionConfig): TransactionConfig {
+  return {
+    enabled: config?.enabled ?? DEFAULT_TRANSACTIONS.enabled,
+    autoDetect: config?.autoDetect ?? DEFAULT_TRANSACTIONS.autoDetect,
+  };
+}
+
+/**
  * Resolves complete configuration with defaults applied
  */
 export function resolveConfigDefaults(config: Partial<UdmConfig>): UdmConfig {
@@ -583,5 +645,6 @@ export function resolveConfigDefaults(config: Partial<UdmConfig>): UdmConfig {
     ...config,
     retention: resolveRetentionDefaults(config.retention),
     rollup: resolveRollupDefaults(config.rollup),
+    transactions: resolveTransactionDefaults(config.transactions),
   } as UdmConfig;
 }

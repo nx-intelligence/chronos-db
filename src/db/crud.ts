@@ -18,6 +18,8 @@ import type { RouteContext } from '../config.js';
 import type { StorageAdapter } from '../storage/interface.js';
 import { externalizeBase64 } from '../meta/externalize.js';
 import { extractIndexed, validateRequiredIndexed, getBase64Properties } from '../meta/metadataMap.js';
+import { getGlobalConfig } from '../config/global.js';
+import { shouldUseTransactions } from '../utils/replicaSet.js';
 // No longer using s3.ts directly - using StorageAdapter interface
 // import { putJSON, del } from '../storage/s3.js';
 import { jsonKey } from '../storage/keys.js';
@@ -100,6 +102,48 @@ function generateServerId(): string {
   const pid = process.pid;
   const timestamp = Date.now();
   return `${hostname}-${pid}-${timestamp}`;
+}
+
+// ============================================================================
+// Transaction Helper Functions
+// ============================================================================
+
+/**
+ * Execute operation with or without transactions based on configuration
+ */
+async function executeWithTransactionSupport<T>(
+  mongoClient: any,
+  operation: (session: ClientSession) => Promise<T>
+): Promise<T> {
+  const config = getGlobalConfig();
+  const mongoUri = config?.mongoUris?.[0];
+  
+  if (!mongoUri) {
+    throw new Error('No MongoDB URI available for transaction check');
+  }
+  
+  const useTransactions = await shouldUseTransactions(
+    { enabled: config?.transactions?.enabled ?? true, autoDetect: config?.transactions?.autoDetect ?? true },
+    mongoUri
+  );
+  
+  if (useTransactions) {
+    // Use transactions
+    const session = mongoClient.startSession();
+    try {
+      return await session.withTransaction(operation);
+    } finally {
+      await session.endSession();
+    }
+  } else {
+    // Execute without transactions
+    const session = mongoClient.startSession();
+    try {
+      return await operation(session);
+    } finally {
+      await session.endSession();
+    }
+  }
 }
 
 // ============================================================================
@@ -245,19 +289,17 @@ export async function createItem(
           );
         }
 
-        // 9. MongoDB transaction
+        // 9. MongoDB operation (with or without transactions based on config)
         const repos = new Repos(mongo, ctx.collection);
         let cv: number = 0;
-        let session: ClientSession | undefined;
 
         try {
-          session = mongoClient.startSession();
-          await session.withTransaction(async () => {
+          await executeWithTransactionSupport(mongoClient, async (session) => {
             // Ensure indexes
             await repos.ensureIndexes(collectionMap);
 
             // Increment collection version
-            cv! = await repos.incCv(session!);
+            cv = await repos.incCv(session);
 
             // Create version document
             const verDoc: VerDoc = {
@@ -308,25 +350,21 @@ export async function createItem(
             }
 
             // Insert documents
-            await repos.insertVersion(verDoc, session!);
-            await repos.upsertHead(headDoc, session!);
+            await repos.insertVersion(verDoc, session);
+            await repos.upsertHead(headDoc, session);
           });
         } catch (error) {
           // Compensation: delete written S3 keys
           await compensateS3(storage, spaces.jsonBucket, spaces.contentBucket, writtenKeys);
           
           throw new TxnError(
-            `Transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            `Operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
             op,
             ctx.collection,
             idHex,
             ov,
-            cv!
+            cv
           );
-        } finally {
-          if (session) {
-            await session.endSession();
-          }
         }
 
         // 10. Return result
@@ -513,15 +551,13 @@ export async function updateItem(
           );
         }
 
-        // 11. MongoDB transaction
-        let cv: number;
-        let session: ClientSession | undefined;
+        // 11. MongoDB operation (with or without transactions based on config)
+        let cv: number = 0;
 
         try {
-          session = mongoClient.startSession();
-          await session.withTransaction(async () => {
+          await executeWithTransactionSupport(mongoClient, async (session) => {
             // Increment collection version
-            cv! = await repos.incCv(session!);
+            cv = await repos.incCv(session);
 
             // Create version document
             const verDoc: VerDoc = {
@@ -573,25 +609,21 @@ export async function updateItem(
             }
 
             // Insert version and update head with optimistic lock
-            await repos.insertVersion(verDoc, session!);
-            await repos.updateHeadWithLock(headDoc, head.ov, session!);
+            await repos.insertVersion(verDoc, session);
+            await repos.updateHeadWithLock(headDoc, head.ov, session);
           });
         } catch (error) {
           // Compensation: delete written S3 keys
           await compensateS3(storage, spaces.jsonBucket, spaces.contentBucket, writtenKeys);
           
           throw new TxnError(
-            `Transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            `Operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
             op,
             ctx.collection,
             id,
             ov,
-            cv!
+            cv
           );
-        } finally {
-          if (session) {
-            await session.endSession();
-          }
         }
 
         // 12. Return result
@@ -696,15 +728,13 @@ export async function deleteItem(
       { serverId, requestId: opts.requestId },
       async () => {
 
-        // 7. MongoDB transaction (no S3 writes for delete)
-        let cv: number;
-        let session: ClientSession | undefined;
+        // 7. MongoDB operation (with or without transactions based on config)
+        let cv: number = 0;
 
         try {
-          session = mongoClient.startSession();
-          await session.withTransaction(async () => {
+          await executeWithTransactionSupport(mongoClient, async (session) => {
             // Increment collection version
-            cv! = await repos.incCv(session!);
+            cv = await repos.incCv(session);
 
             // Create version document (tombstone with previous snapshot)
             const verDoc: VerDoc = {
@@ -753,22 +783,18 @@ export async function deleteItem(
             }
 
             // Insert version and update head with optimistic lock
-            await repos.insertVersion(verDoc, session!);
-            await repos.updateHeadWithLock(headDoc, head.ov, session!);
+            await repos.insertVersion(verDoc, session);
+            await repos.updateHeadWithLock(headDoc, head.ov, session);
           });
         } catch (error) {
           throw new TxnError(
-            `Transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            `Operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
             op,
             ctx.collection,
             id,
             ov,
-            cv!
+            cv
           );
-        } finally {
-          if (session) {
-            await session.endSession();
-          }
         }
 
         // 8. Return result

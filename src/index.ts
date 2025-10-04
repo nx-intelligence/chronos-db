@@ -1,4 +1,5 @@
-import { validateUdmConfig, type UdmConfig, type RouteContext } from './config.js';
+import { validateUdmConfig, validateTransactionConfig, type UdmConfig, type RouteContext } from './config.js';
+import { setGlobalConfig } from './config/global.js';
 import { BridgeRouter } from './router/router.js';
 import type { RestoreResult as RestoreRestoreResult, CollectionRestoreResult, VersionSpec as RestoreVersionSpec, CollVersionSpec, RestoreOptions, CollectionRestoreOptions } from './db/restore.js';
 import { CounterTotalsRepo, type CounterTotalsDoc } from './counters/counters.js';
@@ -430,7 +431,17 @@ export interface PruneResult {
  */
 export function initUnifiedDataManager(config: UdmConfig): Udm {
   // Validate configuration
-  validateUdmConfig(config);
+  const validatedConfig = validateUdmConfig(config);
+  
+  // Validate transaction configuration (async, but we'll handle it in background)
+  validateTransactionConfig(validatedConfig).catch(error => {
+    console.error('chronos-db configuration validation failed:', error.message);
+    // Don't throw here as it would break the synchronous initialization
+    // The error will be caught when transactions are actually attempted
+  });
+  
+  // Set global configuration for access throughout the application
+  setGlobalConfig(validatedConfig);
 
   // Initialize router
   const router = new BridgeRouter({
