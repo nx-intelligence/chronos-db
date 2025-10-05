@@ -1072,6 +1072,355 @@ Built with:
 
 ---
 
+## 📋 Frequently Asked Questions (FAQs)
+
+### **Q: What's the difference between ChronosConfig and EnhancedChronosConfig?**
+**A:** `ChronosConfig` is the basic configuration for single-tenant or simple multi-tenant setups. `EnhancedChronosConfig` extends it with `databaseTypes` for complex multi-tenant architectures with explicit database types (metadata, knowledge, runtime) and tiers (generic, domain, tenant).
+
+### **Q: When should I use direct keys vs tier + extIdentifier?**
+**A:** 
+- **Direct keys** (`key: 'runtime-tenant-a'`) - Use when you know the exact database connection and want maximum performance
+- **Tier + extIdentifier** (`tier: 'tenant', extIdentifier: 'tenant-a'`) - Use when you want flexible mapping and easier configuration management
+
+### **Q: Can I mix different routing methods in the same application?**
+**A:** Yes! You can use different routing methods for different operations:
+```typescript
+// Direct key for critical operations
+const criticalOps = chronos.with({ key: 'runtime-tenant-a', collection: 'payments' });
+
+// Tier-based for flexible operations  
+const flexibleOps = chronos.with({ 
+  databaseType: 'runtime', 
+  tier: 'tenant', 
+  extIdentifier: 'tenant-a', 
+  collection: 'users' 
+});
+```
+
+### **Q: What happens if I don't provide a collection map?**
+**A:** If no collection map is defined, chronos-db automatically indexes **all properties** (except `_system`). This is called "auto-indexing" and is perfect for rapid prototyping and simple use cases.
+
+### **Q: How does the state field work with TTL?**
+**A:** The `state` field tracks data lifecycle:
+- `"new-not-synched"` - Data exists only in MongoDB record
+- `"new"` - Data is synced to JSON storage but hasn't passed TTL
+- `"processed"` - Data has passed TTL, some data may only exist in JSON storage
+
+Use `markItemsAsProcessedByTTL()` to transition states based on TTL expiration.
+
+### **Q: Can I use chronos-db without S3?**
+**A:** Yes! Use `localStorage` for development/testing:
+```typescript
+const chronos = initChronos({
+  mongoUris: ['mongodb://localhost:27017'],
+  localStorage: { enabled: true, basePath: './data' },
+  counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'chronos_counters' },
+  routing: { hashAlgo: 'rendezvous' },
+  retention: {},
+  rollup: {},
+});
+```
+
+### **Q: How do I handle failed operations?**
+**A:** Enable fallback queues for automatic retry:
+```typescript
+const chronos = initChronos({
+  // ... other config
+  fallback: {
+    enabled: true,
+    maxRetries: 3,
+    retryDelayMs: 1000,
+    maxDelayMs: 60000,
+    deadLetterCollection: 'chronos_fallback_dead'
+  }
+});
+```
+
+### **Q: What's the difference between hard delete and soft delete?**
+**A:** 
+- **Soft delete** (default) - Sets `deleted: true` and `deletedAt` timestamp, data remains recoverable
+- **Hard delete** - Permanently removes data from both MongoDB and S3 (enable with `hardDeleteEnabled: true`)
+
+### **Q: How do I monitor chronos-db performance?**
+**A:** Use the admin API for monitoring:
+```typescript
+// Health check
+const health = await chronos.admin.health();
+
+// Backend information
+const backends = await chronos.admin.listBackends();
+
+// Counter analytics
+const totals = await chronos.counters.getTotals({ dbName: 'myapp', collection: 'users' });
+```
+
+### **Q: Can I use chronos-db with DigitalOcean Spaces?**
+**A:** Yes! DigitalOcean Spaces is S3-compatible. Use the admin API to validate your configuration:
+```typescript
+const validation = await chronos.admin.validateSpacesConfiguration({
+  dbName: 'myapp',
+  collection: 'users'
+});
+
+if (!validation.valid) {
+  console.log('Issues:', validation.issues);
+  console.log('Recommendations:', validation.recommendations);
+}
+```
+
+---
+
+## 📊 Logging & Monitoring with logs-gateway
+
+chronos-db integrates seamlessly with logs-gateway for comprehensive logging and monitoring:
+
+### **Structured Logging**
+
+chronos-db uses structured logging that works perfectly with logs-gateway:
+
+```typescript
+import { logger } from 'chronos-db';
+
+// All chronos-db operations automatically log structured data
+const result = await ops.create({ email: 'user@example.com' });
+
+// Logs include:
+// - Operation type (CREATE, UPDATE, DELETE)
+// - Collection and database information
+// - Routing decisions
+// - Performance metrics
+// - Error details (if any)
+```
+
+### **Log Categories**
+
+chronos-db generates logs in these categories:
+
+#### **1. Operation Logs**
+```json
+{
+  "level": "info",
+  "category": "chronos-operation",
+  "operation": "CREATE",
+  "collection": "users",
+  "dbName": "myapp",
+  "tenantId": "tenant-a",
+  "duration": 45,
+  "timestamp": "2024-01-15T10:30:00Z"
+}
+```
+
+#### **2. Routing Logs**
+```json
+{
+  "level": "debug",
+  "category": "chronos-routing",
+  "method": "getRouteInfo",
+  "ctx": {
+    "dbName": "myapp",
+    "collection": "users",
+    "key": "runtime-tenant-a"
+  },
+  "index": 2,
+  "backend": "mongodb://runtime-tenant-a:27017",
+  "routingKey": "runtime-tenant-a",
+  "resolvedDbName": "runtime_tenant_a"
+}
+```
+
+#### **3. Performance Logs**
+```json
+{
+  "level": "info",
+  "category": "chronos-performance",
+  "operation": "bulkCreate",
+  "itemsCount": 100,
+  "duration": 1250,
+  "avgPerItem": 12.5,
+  "timestamp": "2024-01-15T10:30:00Z"
+}
+```
+
+#### **4. Error Logs**
+```json
+{
+  "level": "error",
+  "category": "chronos-error",
+  "operation": "UPDATE",
+  "error": "OptimisticLockError",
+  "message": "Version mismatch: expected 5, got 3",
+  "collection": "users",
+  "itemId": "507f1f77bcf86cd799439011",
+  "timestamp": "2024-01-15T10:30:00Z"
+}
+```
+
+### **logs-gateway Integration**
+
+Configure logs-gateway to capture chronos-db logs:
+
+```typescript
+// logs-gateway configuration
+const logsGateway = new LogsGateway({
+  sources: [
+    {
+      name: 'chronos-db',
+      patterns: [
+        'chronos-operation:*',
+        'chronos-routing:*', 
+        'chronos-performance:*',
+        'chronos-error:*'
+      ],
+      processors: [
+        'chronos-performance-analyzer',
+        'chronos-error-aggregator',
+        'chronos-routing-optimizer'
+      ]
+    }
+  ],
+  outputs: [
+    {
+      type: 'elasticsearch',
+      index: 'chronos-logs-{YYYY.MM.DD}'
+    },
+    {
+      type: 'grafana',
+      dashboard: 'chronos-db-monitoring'
+    }
+  ]
+});
+```
+
+### **Custom Logging**
+
+Add custom logging to your chronos-db operations:
+
+```typescript
+// Custom operation logging
+const ops = chronos.with({
+  key: 'runtime-tenant-a',
+  collection: 'users'
+});
+
+// Wrap operations with custom logging
+const createUser = async (userData) => {
+  const startTime = Date.now();
+  
+  try {
+    logger.info('chronos-operation:CREATE:START', {
+      collection: 'users',
+      tenantId: 'tenant-a',
+      userData: { email: userData.email } // Don't log sensitive data
+    });
+    
+    const result = await ops.create(userData);
+    
+    logger.info('chronos-operation:CREATE:SUCCESS', {
+      collection: 'users',
+      tenantId: 'tenant-a',
+      itemId: result.id,
+      duration: Date.now() - startTime
+    });
+    
+    return result;
+  } catch (error) {
+    logger.error('chronos-operation:CREATE:ERROR', {
+      collection: 'users',
+      tenantId: 'tenant-a',
+      error: error.message,
+      duration: Date.now() - startTime
+    });
+    throw error;
+  }
+};
+```
+
+### **Monitoring Dashboards**
+
+Create Grafana dashboards for chronos-db monitoring:
+
+#### **Performance Dashboard**
+- Operations per second by collection
+- Average operation duration
+- Error rates by operation type
+- Backend utilization
+
+#### **Routing Dashboard**  
+- Routing decisions by tenant
+- Backend distribution
+- Routing performance metrics
+- Multi-tenant usage patterns
+
+#### **Storage Dashboard**
+- S3 storage usage
+- MongoDB collection sizes
+- TTL processing metrics
+- State transition statistics
+
+### **Alerting Rules**
+
+Set up alerts for critical chronos-db metrics:
+
+```yaml
+# Prometheus alerting rules
+groups:
+  - name: chronos-db
+    rules:
+      - alert: ChronosHighErrorRate
+        expr: rate(chronos_errors_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate in chronos-db operations"
+          
+      - alert: ChronosSlowOperations
+        expr: histogram_quantile(0.95, rate(chronos_operation_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "95th percentile operation duration exceeds 5 seconds"
+          
+      - alert: ChronosBackendDown
+        expr: up{job="chronos-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Chronos backend is down"
+```
+
+### **Log Analysis Queries**
+
+Useful queries for analyzing chronos-db logs:
+
+```sql
+-- Top collections by operation count
+SELECT collection, COUNT(*) as operations
+FROM chronos_logs 
+WHERE category = 'chronos-operation'
+GROUP BY collection
+ORDER BY operations DESC;
+
+-- Average operation duration by tenant
+SELECT tenantId, AVG(duration) as avg_duration
+FROM chronos_logs 
+WHERE category = 'chronos-performance'
+GROUP BY tenantId;
+
+-- Error rate by operation type
+SELECT operation, 
+       COUNT(CASE WHEN level = 'error' THEN 1 END) as errors,
+       COUNT(*) as total,
+       (errors * 100.0 / total) as error_rate
+FROM chronos_logs 
+WHERE category = 'chronos-operation'
+GROUP BY operation;
+```
+
+---
+
 ## 📞 Support
 
 For issues, questions, or feature requests, please open an issue on GitHub.
