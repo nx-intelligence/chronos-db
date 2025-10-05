@@ -207,6 +207,13 @@ export async function createItem(
     serverId
   });
   
+  // VERBOSE: Log full data being created
+  logger.fullData('CREATE operation input', data, {
+    collection: ctx.collection,
+    dbName: ctx.dbName,
+    tenantId: ctx.tenantId
+  });
+  
   try {
     // 1. Route to backend
     const routeInfo = router.getRouteInfo(ctx);
@@ -313,6 +320,14 @@ export async function createItem(
         let size: number;
         let sha256: string;
 
+        // VERBOSE: Log storage operation details
+        logger.storageOperation('putJSON', spaces.jsonBucket, jKey, transformed, {
+          operation: 'CREATE',
+          collection: ctx.collection,
+          itemId: idHex,
+          ov
+        });
+
         try {
           const result = await storage.putJSON(spaces.jsonBucket, jKey, transformed);
           size = result.size ?? 0;
@@ -387,6 +402,17 @@ export async function createItem(
                 };
               }
             }
+
+            // VERBOSE: Log MongoDB operations
+            logger.mongoOperation('insertVersion', ctx.collection, undefined, verDoc, undefined, {
+              operation: 'CREATE',
+              itemId: idHex
+            });
+            
+            logger.mongoOperation('upsertHead', ctx.collection, undefined, headDoc, undefined, {
+              operation: 'CREATE',
+              itemId: idHex
+            });
 
             // Insert documents
             await repos.insertVersion(verDoc, session);

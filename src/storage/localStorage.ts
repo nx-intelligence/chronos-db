@@ -111,11 +111,25 @@ export class LocalStorageAdapter implements StorageAdapter {
     const startTime = Date.now();
     logger.debug('Starting putJSON operation', { bucket, key });
     
+    // VERBOSE: Log full data being written
+    logger.fullData('LocalStorage putJSON', data, {
+      bucket,
+      key,
+      filePath: this.getPath(bucket, key)
+    });
+    
     const filePath = this.getPath(bucket, key);
     await this.ensureDir(dirname(filePath));
 
     const jsonString = JSON.stringify(data, null, 2);
     const buffer = Buffer.from(jsonString, 'utf8');
+
+    // VERBOSE: Log internal operation details
+    logger.internalOperation('LocalStorage writeFile', {
+      filePath,
+      bufferSize: buffer.length,
+      jsonStringLength: jsonString.length
+    });
 
     await fs.writeFile(filePath, buffer);
 

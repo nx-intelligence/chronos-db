@@ -7,7 +7,7 @@ export enum LogLevel {
   WARN = 1,
   INFO = 2,
   DEBUG = 3,
-  TRACE = 4,
+  VERBOSE = 4,
 }
 
 export interface LogEntry {
@@ -20,7 +20,7 @@ export interface LogEntry {
 
 class ChronosLogger {
   private currentLevel: LogLevel;
-  private readonly levelNames = ['ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE'];
+  private readonly levelNames = ['ERROR', 'WARN', 'INFO', 'DEBUG', 'VERBOSE'];
 
   constructor() {
     // Default to ERROR level
@@ -88,7 +88,7 @@ class ChronosLogger {
       case LogLevel.DEBUG:
         console.log(formattedMessage);
         break;
-      case LogLevel.TRACE:
+      case LogLevel.VERBOSE:
         console.log(formattedMessage);
         break;
     }
@@ -110,8 +110,8 @@ class ChronosLogger {
     this.log(LogLevel.DEBUG, message, context);
   }
 
-  trace(message: string, context?: Record<string, unknown>): void {
-    this.log(LogLevel.TRACE, message, context);
+  verbose(message: string, context?: Record<string, unknown>): void {
+    this.log(LogLevel.VERBOSE, message, context);
   }
 
   // Utility methods for common logging patterns
@@ -135,7 +135,7 @@ class ChronosLogger {
     }
   }
 
-  storageOperation(operation: string, bucket: string, key: string, success: boolean, context?: Record<string, unknown>): void {
+  storageOperationDebug(operation: string, bucket: string, key: string, success: boolean, context?: Record<string, unknown>): void {
     if (success) {
       this.debug(`Storage operation succeeded: ${operation}`, { bucket, key, ...context });
     } else {
@@ -157,6 +157,71 @@ class ChronosLogger {
     } else {
       this.error(`Transaction operation failed: ${operation}`, { useTransactions, ...context });
     }
+  }
+
+  // VERBOSE level methods for detailed logging
+  fullQuery(operation: string, collection: string, query: any, context?: Record<string, unknown>): void {
+    this.verbose(`Full query executed: ${operation}`, {
+      collection,
+      query: JSON.stringify(query, null, 2),
+      ...context
+    });
+  }
+
+  fullData(operation: string, data: any, context?: Record<string, unknown>): void {
+    this.verbose(`Full data processed: ${operation}`, {
+      data: JSON.stringify(data, null, 2),
+      dataSize: JSON.stringify(data).length,
+      ...context
+    });
+  }
+
+  internalOperation(operation: string, details: any, context?: Record<string, unknown>): void {
+    this.verbose(`Internal operation: ${operation}`, {
+      details: JSON.stringify(details, null, 2),
+      ...context
+    });
+  }
+
+  routingDecision(decision: string, details: any, context?: Record<string, unknown>): void {
+    this.verbose(`Routing decision: ${decision}`, {
+      details: JSON.stringify(details, null, 2),
+      ...context
+    });
+  }
+
+  storageOperation(operation: string, bucket: string, key: string, data?: any, context?: Record<string, unknown>): void {
+    const logContext: Record<string, unknown> = {
+      bucket,
+      key,
+      ...context
+    };
+    
+    if (data !== undefined) {
+      logContext.data = JSON.stringify(data, null, 2);
+      logContext.dataSize = JSON.stringify(data).length;
+    }
+    
+    this.verbose(`Storage operation: ${operation}`, logContext);
+  }
+
+  mongoOperation(operation: string, collection: string, query?: any, update?: any, options?: any, context?: Record<string, unknown>): void {
+    const logContext: Record<string, unknown> = {
+      collection,
+      ...context
+    };
+    
+    if (query !== undefined) {
+      logContext.query = JSON.stringify(query, null, 2);
+    }
+    if (update !== undefined) {
+      logContext.update = JSON.stringify(update, null, 2);
+    }
+    if (options !== undefined) {
+      logContext.options = JSON.stringify(options, null, 2);
+    }
+    
+    this.verbose(`MongoDB operation: ${operation}`, logContext);
   }
 
   // Get current log level (useful for testing)

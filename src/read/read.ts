@@ -6,6 +6,7 @@ import { BridgeRouter } from '../router/router.js';
 import { Repos } from '../db/repos.js';
 import type { StorageAdapter } from '../storage/interface.js';
 import type { HeadDoc, VerDoc } from '../db/schemas.js';
+import { logger } from '../utils/logger.js';
 
 // ============================================================================
 // Types
@@ -96,6 +97,12 @@ export async function getItem(
   if (opts.ov !== undefined && opts.at !== undefined) {
     throw new Error('Cannot specify both ov and at options');
   }
+
+  // VERBOSE: Log query details
+  logger.fullQuery('getItem', ctx.collection, { id, opts }, {
+    dbName: ctx.dbName,
+    tenantId: ctx.tenantId
+  });
 
   const routeInfo = router.getRouteInfo(ctx);
   const mongoClient = await router.getMongo(routeInfo.index);

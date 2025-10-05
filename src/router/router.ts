@@ -415,6 +415,15 @@ export class BridgeRouter {
     }
     const routingKey = this.generateKey(ctx);
     
+    // VERBOSE: Log routing decision details
+    logger.routingDecision('getRouteInfo', {
+      ctx,
+      index,
+      backend,
+      routingKey,
+      availableBackends: backends.length
+    });
+    
     return {
       index,
       backend,
