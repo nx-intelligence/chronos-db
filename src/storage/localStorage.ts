@@ -2,6 +2,7 @@ import { promises as fs, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { createHash } from 'crypto';
 import type { StorageAdapter } from './interface.js';
+import { logger } from '../utils/logger.js';
 
 // ============================================================================
 // Local Filesystem Storage Adapter
@@ -19,6 +20,7 @@ export class LocalStorageAdapter implements StorageAdapter {
 
   constructor(basePath: string) {
     this.basePath = basePath;
+    logger.debug('Initializing LocalStorageAdapter', { basePath });
     // Ensure base directory and standard subfolders exist on initialization (synchronously)
     this.initializeDirectoriesSync();
   }
@@ -27,16 +29,30 @@ export class LocalStorageAdapter implements StorageAdapter {
    * Initialize base directory and standard subfolders (synchronous)
    */
   private initializeDirectoriesSync(): void {
+    logger.debug('Creating directory structure', { basePath: this.basePath });
+    
     // Create base directory
     this.ensureDirSync(this.basePath);
     
     // Create standard subfolders
-    this.ensureDirSync(join(this.basePath, 'chronos'));
-    this.ensureDirSync(join(this.basePath, 'chronos', 'backups'));
-    this.ensureDirSync(join(this.basePath, 'chronos', 'json'));
-    this.ensureDirSync(join(this.basePath, 'chronos', 'content'));
-    this.ensureDirSync(join(this.basePath, 'manifests'));
-    this.ensureDirSync(join(this.basePath, 'snapshots'));
+    const subfolders = [
+      'chronos',
+      'chronos/backups',
+      'chronos/json',
+      'chronos/content',
+      'manifests',
+      'snapshots'
+    ];
+    
+    subfolders.forEach(subfolder => {
+      const fullPath = join(this.basePath, subfolder);
+      this.ensureDirSync(fullPath);
+    });
+    
+    logger.debug('Directory structure created successfully', { 
+      basePath: this.basePath,
+      subfolders 
+    });
   }
 
   /**
@@ -92,6 +108,9 @@ export class LocalStorageAdapter implements StorageAdapter {
     key: string,
     data: any
   ): Promise<{ size: number | null; sha256: string | null }> {
+    const startTime = Date.now();
+    logger.debug('Starting putJSON operation', { bucket, key });
+    
     const filePath = this.getPath(bucket, key);
     await this.ensureDir(dirname(filePath));
 
@@ -104,6 +123,15 @@ export class LocalStorageAdapter implements StorageAdapter {
     const hash = createHash('sha256');
     hash.update(buffer);
     const sha256 = hash.digest('hex');
+
+    const duration = Date.now() - startTime;
+    logger.debug('putJSON operation completed successfully', {
+      bucket,
+      key,
+      size: buffer.length,
+      sha256,
+      durationMs: duration
+    });
 
     return {
       size: buffer.length,

@@ -1,5 +1,6 @@
 import { validateUdmConfig, validateTransactionConfig, type UdmConfig, type RouteContext } from './config.js';
 import { setGlobalConfig } from './config/global.js';
+import { logger } from './utils/logger.js';
 import { BridgeRouter } from './router/router.js';
 import type { RestoreResult as RestoreRestoreResult, CollectionRestoreResult, VersionSpec as RestoreVersionSpec, CollVersionSpec, RestoreOptions, CollectionRestoreOptions } from './db/restore.js';
 import { CounterTotalsRepo, type CounterTotalsDoc } from './counters/counters.js';
@@ -430,12 +431,21 @@ export interface PruneResult {
  * @throws Error if configuration is invalid
  */
 export function initUnifiedDataManager(config: UdmConfig): Udm {
+  const startTime = Date.now();
+  logger.info('Initializing chronos-db', {
+    version: '1.1.5',
+    mongoUrisCount: config.mongoUris.length,
+    hasSpacesConns: !!config.spacesConns && config.spacesConns.length > 0,
+    localStorageEnabled: config.localStorage?.enabled,
+    transactionsEnabled: config.transactions?.enabled
+  });
+  
   // Validate configuration
   const validatedConfig = validateUdmConfig(config);
   
   // Validate transaction configuration (async, but we'll handle it in background)
   validateTransactionConfig(validatedConfig).catch(error => {
-    console.error('chronos-db configuration validation failed:', error.message);
+    logger.error('chronos-db configuration validation failed', {}, error);
     // Don't throw here as it would break the synchronous initialization
     // The error will be caught when transactions are actually attempted
   });
@@ -444,6 +454,7 @@ export function initUnifiedDataManager(config: UdmConfig): Udm {
   setGlobalConfig(validatedConfig);
 
   // Initialize router
+  logger.debug('Initializing BridgeRouter');
   const router = new BridgeRouter({
     mongoUris: config.mongoUris,
     ...(config.spacesConns && { spacesConns: config.spacesConns }),
@@ -451,6 +462,7 @@ export function initUnifiedDataManager(config: UdmConfig): Udm {
     hashAlgo: config.routing.hashAlgo,
     chooseKey: config.routing.chooseKey ?? 'tenantId|dbName|collection:objectId',
   });
+  logger.debug('BridgeRouter initialized successfully');
 
   // Initialize counters
   let countersRepo: CounterTotalsRepo | null = null;
@@ -497,6 +509,14 @@ export function initUnifiedDataManager(config: UdmConfig): Udm {
   if (config.writeOptimization) {
     writeOptimizer = new WriteOptimizer(config.writeOptimization);
   }
+
+  // Log initialization completion
+  const duration = Date.now() - startTime;
+  logger.info('chronos-db initialization completed successfully', {
+    durationMs: duration,
+    collectionsCount: Object.keys(validatedConfig.collectionMaps).length,
+    fallbackEnabled: !!validatedConfig.fallback?.enabled
+  });
 
   return {
     route: (ctx: RouteContext) => {

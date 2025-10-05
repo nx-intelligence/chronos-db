@@ -20,6 +20,7 @@ import { externalizeBase64 } from '../meta/externalize.js';
 import { extractIndexed, validateRequiredIndexed, getBase64Properties } from '../meta/metadataMap.js';
 import { getGlobalConfig } from '../config/global.js';
 import { shouldUseTransactions } from '../utils/replicaSet.js';
+import { logger } from '../utils/logger.js';
 // No longer using s3.ts directly - using StorageAdapter interface
 // import { putJSON, del } from '../storage/s3.js';
 import { jsonKey } from '../storage/keys.js';
@@ -115,10 +116,18 @@ async function executeWithTransactionSupport<T>(
   mongoClient: any,
   operation: (session: ClientSession) => Promise<T>
 ): Promise<T> {
+  const startTime = Date.now();
   const config = getGlobalConfig();
   const mongoUri = config?.mongoUris?.[0];
   
+  logger.debug('Starting transaction support check', {
+    mongoUri: mongoUri?.replace(/\/\/.*@/, '//***@'),
+    transactionsEnabled: config?.transactions?.enabled,
+    autoDetect: config?.transactions?.autoDetect
+  });
+  
   if (!mongoUri) {
+    logger.error('No MongoDB URI available for transaction check');
     throw new Error('No MongoDB URI available for transaction check');
   }
   
@@ -127,19 +136,40 @@ async function executeWithTransactionSupport<T>(
     mongoUri
   );
   
+  logger.debug('Transaction support decision made', {
+    useTransactions,
+    mongoUri: mongoUri.replace(/\/\/.*@/, '//***@')
+  });
+  
   if (useTransactions) {
     // Use transactions
+    logger.debug('Executing operation with transactions');
     const session = mongoClient.startSession();
     try {
-      return await session.withTransaction(operation);
+      const result = await session.withTransaction(operation);
+      const duration = Date.now() - startTime;
+      logger.debug('Transaction operation completed successfully', { durationMs: duration });
+      return result;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      logger.error('Transaction operation failed', { durationMs: duration }, error as Error);
+      throw error;
     } finally {
       await session.endSession();
     }
   } else {
     // Execute without transactions
+    logger.debug('Executing operation without transactions');
     const session = mongoClient.startSession();
     try {
-      return await operation(session);
+      const result = await operation(session);
+      const duration = Date.now() - startTime;
+      logger.debug('Non-transaction operation completed successfully', { durationMs: duration });
+      return result;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      logger.error('Non-transaction operation failed', { durationMs: duration }, error as Error);
+      throw error;
     } finally {
       await session.endSession();
     }
@@ -167,6 +197,15 @@ export async function createItem(
 ): Promise<CreateResult> {
   const { actor, reason, serverId = generateServerId() } = opts;
   const op = 'CREATE';
+  const startTime = Date.now();
+  
+  logger.debug('Starting create operation', {
+    collection: ctx.collection,
+    dbName: ctx.dbName,
+    tenantId: ctx.tenantId,
+    dataKeys: Object.keys(data),
+    serverId
+  });
   
   try {
     // 1. Route to backend
@@ -368,16 +407,35 @@ export async function createItem(
         }
 
         // 10. Return result
-        return {
+        const duration = Date.now() - startTime;
+        const result = {
           id: idHex,
           ov,
-          cv: cv!,
+          cv: cv,
           createdAt: now,
         };
+        
+        logger.debug('Create operation completed successfully', {
+          id: idHex,
+          ov,
+          cv,
+          durationMs: duration,
+          collection: ctx.collection
+        });
+        
+        return result;
       }
     );
 
   } catch (error) {
+    const duration = Date.now() - startTime;
+    logger.error('Create operation failed', {
+      collection: ctx.collection,
+      dbName: ctx.dbName,
+      durationMs: duration,
+      serverId
+    }, error as Error);
+    
     if (error instanceof CrudError) {
       throw error;
     }

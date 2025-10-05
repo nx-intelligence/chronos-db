@@ -7,6 +7,7 @@ import type { SpacesConnConfig, LocalStorageConfig } from '../config.js';
 import { LocalStorageAdapter } from '../storage/localStorage.js';
 import { S3StorageAdapter } from '../storage/s3Adapter.js';
 import type { StorageAdapter } from '../storage/interface.js';
+import { logger } from '../utils/logger.js';
 
 // ============================================================================
 // Types
@@ -58,6 +59,14 @@ export class BridgeRouter {
   private _isShutdown = false;
 
   constructor(args: RouterInitArgs) {
+    logger.debug('Initializing BridgeRouter', {
+      mongoUrisCount: args.mongoUris.length,
+      spacesConnsCount: args.spacesConns?.length || 0,
+      localStorageEnabled: args.localStorage?.enabled,
+      hashAlgo: args.hashAlgo,
+      chooseKey: args.chooseKey
+    });
+    
     this.validateArgs(args);
     
     this.mongoUris = [...args.mongoUris];
@@ -68,15 +77,27 @@ export class BridgeRouter {
     this.hashAlgo = args.hashAlgo ?? 'rendezvous';
     this.chooseKey = args.chooseKey ?? 'tenantId|dbName|collection:objectId';
     
+    logger.debug('BridgeRouter configuration set', {
+      mongoUrisCount: this.mongoUris.length,
+      hasSpacesConns: !!this.spacesConns,
+      hasLocalStorage: !!this.localStorage,
+      hashAlgo: this.hashAlgo,
+      chooseKey: this.chooseKey
+    });
+    
     // Initialize local storage buckets if enabled
     if (this.localStorage) {
       this.localStorage.initialize(['json', 'content', 'backups']).catch(error => {
-        console.error('Failed to initialize local storage:', error);
+        logger.error('Failed to initialize local storage', {}, error);
       });
     }
     
     // Generate backend IDs for consistent routing
     this.backendIds = this.generateBackendIds();
+    
+    logger.debug('BridgeRouter initialization completed', {
+      backendIdsCount: this.backendIds.length
+    });
   }
 
   /**

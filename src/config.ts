@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isReplicaSetAvailable } from './utils/replicaSet.js';
+import { logger } from './utils/logger.js';
 
 // ============================================================================
 // TypeScript Interfaces
@@ -481,16 +482,35 @@ const udmConfigSchema = z.object({
  * @throws Error if transaction configuration is invalid
  */
 export async function validateTransactionConfig(config: Partial<UdmConfig>): Promise<void> {
+  logger.debug('Starting transaction configuration validation', {
+    transactionsEnabled: config.transactions?.enabled,
+    autoDetect: config.transactions?.autoDetect,
+    mongoUrisCount: config.mongoUris?.length
+  });
+
   if (config.transactions?.enabled === true) {
     // Check if MongoDB supports transactions
     const mongoUri = config.mongoUris?.[0];
     if (!mongoUri) {
+      logger.error('Transaction validation failed: No MongoDB URI available');
       throw new Error('No MongoDB URI available for transaction validation');
     }
     
+    logger.debug('Checking MongoDB replica set availability', { mongoUri: mongoUri.replace(/\/\/.*@/, '//***@') });
     const hasReplicaSet = await isReplicaSetAvailable(mongoUri);
     
+    logger.debug('MongoDB replica set check completed', { 
+      hasReplicaSet, 
+      autoDetect: config.transactions.autoDetect,
+      mongoUri: mongoUri.replace(/\/\/.*@/, '//***@')
+    });
+    
     if (!hasReplicaSet && config.transactions.autoDetect !== false) {
+      logger.error('Transaction validation failed: MongoDB is not a replica set', {
+        hasReplicaSet,
+        autoDetect: config.transactions.autoDetect,
+        mongoUri: mongoUri.replace(/\/\/.*@/, '//***@')
+      });
       throw new Error(
         'chronos-db: Transactions are enabled but MongoDB is not configured as a replica set. ' +
         'Either disable transactions by setting "transactions.enabled: false" or configure MongoDB as a replica set. ' +
@@ -498,11 +518,33 @@ export async function validateTransactionConfig(config: Partial<UdmConfig>): Pro
       );
     }
   }
+
+  logger.debug('Transaction configuration validation completed successfully', {
+    transactionsEnabled: config.transactions?.enabled,
+    autoDetect: config.transactions?.autoDetect
+  });
 }
 
 export function validateUdmConfig(config: unknown): UdmConfig {
-  const validated = udmConfigSchema.parse(config);
-  return resolveConfigDefaults(validated);
+  logger.debug('Starting UDM configuration validation');
+  
+  try {
+    const validated = udmConfigSchema.parse(config);
+    const resolved = resolveConfigDefaults(validated);
+    
+    logger.debug('UDM configuration validation completed successfully', {
+      mongoUrisCount: resolved.mongoUris.length,
+      hasSpacesConns: !!resolved.spacesConns && resolved.spacesConns.length > 0,
+      localStorageEnabled: resolved.localStorage?.enabled,
+      transactionsEnabled: resolved.transactions?.enabled,
+      collectionsCount: Object.keys(resolved.collectionMaps).length
+    });
+    
+    return resolved;
+  } catch (error) {
+    logger.error('UDM configuration validation failed', {}, error as Error);
+    throw error;
+  }
 }
 
 /**
