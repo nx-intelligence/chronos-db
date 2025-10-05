@@ -345,7 +345,7 @@ const rollupConfigSchema = z.object({
 }).optional();
 
 const collectionMapSchema = z.object({
-  indexedProps: z.array(z.string()).min(1, 'At least one indexed property is required'),
+  indexedProps: z.array(z.string()), // Allow empty array for auto-indexing
   base64Props: z.record(
     z.string(),
     z.object({

@@ -47,7 +47,7 @@ export const CountersRulesSchema = z.object({
 }).default({});
 
 export const CollectionMapSchema = z.object({
-  indexedProps: z.array(z.string().min(1, 'Indexed property name cannot be empty')),
+  indexedProps: z.array(z.string().min(1, 'Indexed property name cannot be empty')), // Allow empty array for auto-indexing
   base64Props: z.record(z.object({
     contentType: z.string().min(1, 'Content type is required'),
     preferredText: z.boolean().optional(),
