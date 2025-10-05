@@ -1,4 +1,4 @@
-import { ObjectId, ClientSession } from 'mongodb';
+import { ObjectId } from 'mongodb';
 import type { StorageAdapter } from '../storage/interface.js';
 import { BridgeRouter } from '../router/router.js';
 import { Repos } from '../db/repos.js';
@@ -27,6 +27,7 @@ import {
 } from '../meta/systemFields.js';
 import { getGlobalConfig } from '../config/global.js';
 import type { DevShadowConfig } from '../config.js';
+import { executeWithTransactionSupport, isVersioningEnabled } from '../db/crud.js';
 
 // ============================================================================
 // Types
@@ -239,33 +240,36 @@ export async function enrichRecord(
       );
     }
 
-    // 12. MongoDB transaction
+    // 12. MongoDB operation (with or without transactions based on config)
     let cv: number;
-    let session: ClientSession | undefined;
 
     try {
-      session = mongoClient.startSession();
-      await session.withTransaction(async () => {
+      await executeWithTransactionSupport(mongoClient, async (session) => {
         // Increment collection version
-        cv! = await repos.incCv(session!);
+        cv = await repos.incCv(session);
 
-        // Create version document
-        const verDoc: VerDoc = {
-          _id: new ObjectId(),
-          itemId: new ObjectId(id),
-          ov,
-          cv,
-          op: 'UPDATE',
-          at: now,
-          ...(actor && { actor }),
-          ...(reason && { reason }),
-          jsonBucket: spaces.buckets.json,
-          jsonKey: jKey,
-          metaIndexed,
-          size: size ?? 0,
-          checksum: sha256,
-          prevOv: head.ov,
-        };
+        // Create version document (only if versioning is enabled)
+        if (isVersioningEnabled()) {
+          const verDoc: VerDoc = {
+            _id: new ObjectId(),
+            itemId: new ObjectId(id),
+            ov,
+            cv,
+            op: 'UPDATE',
+            at: now,
+            ...(actor && { actor }),
+            ...(reason && { reason }),
+            jsonBucket: spaces.buckets.json,
+            jsonKey: jKey,
+            metaIndexed,
+            size: size ?? 0,
+            checksum: sha256,
+            prevOv: head.ov,
+          };
+
+          // Insert version document
+          await repos.insertVersion(verDoc, session);
+        }
 
         // Update head document
         const headDoc: HeadDoc = {
@@ -300,26 +304,21 @@ export async function enrichRecord(
           }
         }
 
-        // Insert version and update head with optimistic lock
-        await repos.insertVersion(verDoc, session!);
-        await repos.updateHeadWithLock(headDoc, head.ov, session!);
-      });
+        // Update head with optimistic lock
+        await repos.updateHeadWithLock(headDoc, head.ov, session);
+      }, router);
     } catch (error) {
       // Compensation: delete written S3 keys
       await compensateS3(storage, spaces.buckets.json, spaces.buckets.content, writtenKeys);
       
       throw new TxnError(
-        `Transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         op,
         ctx.collection,
         id,
         ov,
         cv!
       );
-    } finally {
-      if (session) {
-        await session.endSession();
-      }
     }
 
     // 13. Return result

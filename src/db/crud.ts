@@ -36,7 +36,7 @@ import { CounterTotalsRepo } from '../counters/counters.js';
 /**
  * Check if logical delete is enabled
  */
-function isLogicalDeleteEnabled(): boolean {
+export function isLogicalDeleteEnabled(): boolean {
   const config = getGlobalConfig();
   return config.logicalDelete?.enabled !== false; // Default to true
 }
@@ -44,7 +44,7 @@ function isLogicalDeleteEnabled(): boolean {
 /**
  * Check if versioning is enabled
  */
-function isVersioningEnabled(): boolean {
+export function isVersioningEnabled(): boolean {
   const config = getGlobalConfig();
   return config.versioning?.enabled !== false; // Default to true
 }
@@ -53,7 +53,7 @@ function isVersioningEnabled(): boolean {
  * Check if counters should be called for this context
  * Counters only work on runtime tier
  */
-function shouldCallCounters(ctx: RouteContext): boolean {
+export function shouldCallCounters(ctx: RouteContext): boolean {
   // Only call counters for runtime database type
   return ctx.databaseType === 'runtime';
 }
@@ -184,7 +184,7 @@ function generateServerId(): string {
 /**
  * Execute operation with or without transactions based on configuration
  */
-async function executeWithTransactionSupport<T>(
+export async function executeWithTransactionSupport<T>(
   mongoClient: any,
   operation: (session: ClientSession) => Promise<T>,
   router: BridgeRouter
