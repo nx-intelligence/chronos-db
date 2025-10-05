@@ -323,6 +323,209 @@ interface DatabaseConnection {
 }
 ```
 
+### Multi-Tenant Architecture Explained
+
+#### Database Types
+- **`metadata`** - System configuration, user settings, application metadata
+- **`knowledge`** - Content, documents, knowledge base, static data
+- **`runtime`** - User data, transactions, dynamic application data
+
+#### Tiers
+- **`generic`** - Shared across all tenants (system-wide data)
+- **`domain`** - Shared within a domain (multi-tenant within domain)
+- **`tenant`** - Isolated per tenant (single-tenant data)
+
+#### Keys vs ExtIdentifiers
+- **`key`** - Globally unique identifier for direct routing (e.g., `"runtime-tenant-a"`)
+- **`extIdentifier`** - External, non-unique identifier for mapping (e.g., `"tenant-a"`)
+
+#### Usage Patterns
+
+**Option A: Direct Key Usage (Simplest)**
+```typescript
+const ops = chronos.with({
+  key: 'runtime-tenant-a',  // Direct lookup, no resolution needed
+  collection: 'users'
+});
+```
+
+**Option B: Tier + ExtIdentifier Usage**
+```typescript
+const ops = chronos.with({
+  databaseType: 'runtime',     // metadata | knowledge | runtime
+  tier: 'tenant',              // generic | domain | tenant
+  extIdentifier: 'tenant-a',   // Maps to key: 'runtime-tenant-a'
+  collection: 'users'
+});
+```
+
+**Option C: Generic Tier (No ExtIdentifier)**
+```typescript
+const ops = chronos.with({
+  databaseType: 'metadata',
+  tier: 'generic',              // No extIdentifier needed
+  collection: 'config'
+});
+```
+
+#### Complete Multi-Tenant Example
+
+```typescript
+const chronos = initChronos({
+  mongoUris: [
+    // Metadata databases
+    'mongodb://meta-generic:27017',
+    'mongodb://meta-domain1:27017', 
+    'mongodb://meta-tenant-a:27017',
+    'mongodb://meta-tenant-b:27017',
+    
+    // Knowledge databases
+    'mongodb://know-generic:27017',
+    'mongodb://know-domain1:27017',
+    'mongodb://know-tenant-a:27017',
+    'mongodb://know-tenant-b:27017',
+    
+    // Runtime databases
+    'mongodb://runtime-generic:27017',
+    'mongodb://runtime-domain1:27017',
+    'mongodb://runtime-tenant-a:27017',
+    'mongodb://runtime-tenant-b:27017'
+  ],
+  spacesConns: [/* S3 config */],
+  counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'chronos_counters' },
+  routing: { hashAlgo: 'rendezvous' },
+  retention: {},
+  rollup: {},
+  
+  databaseTypes: {
+    metadata: {
+      generic: { 
+        key: 'meta-generic', 
+        mongoUri: 'mongodb://meta-generic:27017', 
+        dbName: 'meta_generic' 
+      },
+      domains: [
+        { 
+          key: 'meta-domain-1', 
+          extIdentifier: 'domain-1', 
+          mongoUri: 'mongodb://meta-domain1:27017', 
+          dbName: 'meta_domain_1' 
+        }
+      ],
+      tenants: [
+        { 
+          key: 'meta-tenant-a', 
+          extIdentifier: 'tenant-a', 
+          mongoUri: 'mongodb://meta-tenant-a:27017', 
+          dbName: 'meta_tenant_a' 
+        },
+        { 
+          key: 'meta-tenant-b', 
+          extIdentifier: 'tenant-b', 
+          mongoUri: 'mongodb://meta-tenant-b:27017', 
+          dbName: 'meta_tenant_b' 
+        }
+      ]
+    },
+    knowledge: {
+      generic: { 
+        key: 'know-generic', 
+        mongoUri: 'mongodb://know-generic:27017', 
+        dbName: 'know_generic' 
+      },
+      domains: [
+        { 
+          key: 'know-domain-1', 
+          extIdentifier: 'domain-1', 
+          mongoUri: 'mongodb://know-domain1:27017', 
+          dbName: 'know_domain_1' 
+        }
+      ],
+      tenants: [
+        { 
+          key: 'know-tenant-a', 
+          extIdentifier: 'tenant-a', 
+          mongoUri: 'mongodb://know-tenant-a:27017', 
+          dbName: 'know_tenant_a' 
+        },
+        { 
+          key: 'know-tenant-b', 
+          extIdentifier: 'tenant-b', 
+          mongoUri: 'mongodb://know-tenant-b:27017', 
+          dbName: 'know_tenant_b' 
+        }
+      ]
+    },
+    runtime: {
+      generic: { 
+        key: 'runtime-generic', 
+        mongoUri: 'mongodb://runtime-generic:27017', 
+        dbName: 'runtime_generic' 
+      },
+      domains: [
+        { 
+          key: 'runtime-domain-1', 
+          extIdentifier: 'domain-1', 
+          mongoUri: 'mongodb://runtime-domain1:27017', 
+          dbName: 'runtime_domain_1' 
+        }
+      ],
+      tenants: [
+        { 
+          key: 'runtime-tenant-a', 
+          extIdentifier: 'tenant-a', 
+          mongoUri: 'mongodb://runtime-tenant-a:27017', 
+          dbName: 'runtime_tenant_a' 
+        },
+        { 
+          key: 'runtime-tenant-b', 
+          extIdentifier: 'tenant-b', 
+          mongoUri: 'mongodb://runtime-tenant-b:27017', 
+          dbName: 'runtime_tenant_b' 
+        }
+      ]
+    }
+  }
+});
+
+// Usage Examples:
+
+// 1. Direct key usage (fastest)
+const tenantAUsers = chronos.with({
+  key: 'runtime-tenant-a',
+  collection: 'users'
+});
+
+// 2. Tier + extIdentifier usage (flexible)
+const tenantAUsers2 = chronos.with({
+  databaseType: 'runtime',
+  tier: 'tenant',
+  extIdentifier: 'tenant-a',  // Resolves to 'runtime-tenant-a'
+  collection: 'users'
+});
+
+// 3. Generic tier (shared data)
+const systemConfig = chronos.with({
+  databaseType: 'metadata',
+  tier: 'generic',
+  collection: 'config'
+});
+
+// 4. Domain tier (shared within domain)
+const domainContent = chronos.with({
+  databaseType: 'knowledge',
+  tier: 'domain',
+  extIdentifier: 'domain-1',  // Resolves to 'know-domain-1'
+  collection: 'articles'
+});
+
+// Operations work the same regardless of routing method
+await tenantAUsers.create({ email: 'user@tenant-a.com' });
+await tenantAUsers2.create({ email: 'user2@tenant-a.com' });
+await systemConfig.create({ setting: 'global_value' });
+await domainContent.create({ title: 'Shared Article' });
+```
+
 ### S3 Configuration
 
 ```typescript
