@@ -12,6 +12,7 @@ export interface SystemHeader {
   parentCollection?: string; // parent collection name
   originId?: string;      // original root record _id (preserved throughout lineage)
   originCollection?: string; // original root collection name
+  state?: 'new-not-synched' | 'new' | 'processed'; // data sync and TTL state
 }
 
 export interface LineageInfo {
@@ -33,12 +34,14 @@ export interface LineageInfo {
  * Create system header for CREATE operation
  * @param now - Current timestamp
  * @param lineage - Optional parent/origin information for lineage tracking
+ * @param state - Initial state (defaults to 'new-not-synched')
  */
-export function createSystemHeader(now: Date, lineage?: LineageInfo): SystemHeader {
+export function createSystemHeader(now: Date, lineage?: LineageInfo, state: 'new-not-synched' | 'new' | 'processed' = 'new-not-synched'): SystemHeader {
   const iso = now.toISOString();
   const header: SystemHeader = {
     insertedAt: iso,
     updatedAt: iso,
+    state,
   };
 
   // Add parent tracking if provided
@@ -70,10 +73,11 @@ export function createSystemHeader(now: Date, lineage?: LineageInfo): SystemHead
 /**
  * Create system header for UPDATE operation
  */
-export function updateSystemHeader(previousSystem: SystemHeader, now: Date): SystemHeader {
+export function updateSystemHeader(previousSystem: SystemHeader, now: Date, newState?: 'new-not-synched' | 'new' | 'processed'): SystemHeader {
   return {
     insertedAt: previousSystem.insertedAt,
     updatedAt: now.toISOString(),
+    state: newState || previousSystem.state || 'new-not-synched',
   };
 }
 
@@ -86,6 +90,7 @@ export function deleteSystemHeader(previousSystem: SystemHeader, now: Date): Sys
     updatedAt: now.toISOString(),
     deletedAt: now.toISOString(),
     deleted: true,
+    state: previousSystem.state || 'new-not-synched',
   };
 }
 
@@ -96,6 +101,7 @@ export function restoreSystemHeader(targetSystem: SystemHeader, now: Date): Syst
   const header: SystemHeader = {
     insertedAt: targetSystem.insertedAt,
     updatedAt: now.toISOString(),
+    state: targetSystem.state || 'new-not-synched',
   };
   
   // Preserve deleted fields if target was deleted
@@ -128,7 +134,8 @@ export function extractSystemHeader(data: Record<string, unknown>): SystemHeader
       typeof sys['insertedAt'] === 'string' &&
       typeof sys['updatedAt'] === 'string' &&
       (sys['deletedAt'] === undefined || typeof sys['deletedAt'] === 'string') &&
-      (sys['deleted'] === undefined || typeof sys['deleted'] === 'boolean')
+      (sys['deleted'] === undefined || typeof sys['deleted'] === 'boolean') &&
+      (sys['state'] === undefined || ['new-not-synched', 'new', 'processed'].includes(sys['state'] as string))
     ) {
       return sys as unknown as SystemHeader;
     }
@@ -141,4 +148,67 @@ export function extractSystemHeader(data: Record<string, unknown>): SystemHeader
  */
 export function hasSystemHeader(data: Record<string, unknown>): boolean {
   return extractSystemHeader(data) !== null;
+}
+
+/**
+ * State transition helper functions
+ */
+
+/**
+ * Mark data as synced to JSON storage
+ */
+export function markAsSynced(systemHeader: SystemHeader): SystemHeader {
+  return {
+    ...systemHeader,
+    state: 'new',
+  };
+}
+
+/**
+ * Mark data as processed (TTL expired, some data may only exist in JSON)
+ */
+export function markAsProcessed(systemHeader: SystemHeader): SystemHeader {
+  return {
+    ...systemHeader,
+    state: 'processed',
+  };
+}
+
+/**
+ * Check if data is in 'new-not-synched' state
+ */
+export function isNotSynced(systemHeader: SystemHeader): boolean {
+  return systemHeader.state === 'new-not-synched' || !systemHeader.state;
+}
+
+/**
+ * Check if data is in 'new' state (synced but not processed)
+ */
+export function isSynced(systemHeader: SystemHeader): boolean {
+  return systemHeader.state === 'new';
+}
+
+/**
+ * Check if data is in 'processed' state (TTL expired)
+ */
+export function isProcessed(systemHeader: SystemHeader): boolean {
+  return systemHeader.state === 'processed';
+}
+
+/**
+ * Determine state based on TTL expiration
+ * @param systemHeader - Current system header
+ * @param ttlHours - TTL in hours
+ * @param now - Current timestamp
+ */
+export function shouldMarkAsProcessed(systemHeader: SystemHeader, ttlHours: number, now: Date): boolean {
+  if (systemHeader.state === 'processed') {
+    return false; // Already processed
+  }
+  
+  const insertedAt = new Date(systemHeader.insertedAt);
+  const ttlMs = ttlHours * 60 * 60 * 1000;
+  const elapsedMs = now.getTime() - insertedAt.getTime();
+  
+  return elapsedMs >= ttlMs;
 }

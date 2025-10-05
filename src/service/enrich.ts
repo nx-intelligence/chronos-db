@@ -22,6 +22,7 @@ import {
   createSystemHeader, 
   addSystemHeader, 
   extractSystemHeader,
+  markAsSynced,
   type SystemHeader 
 } from '../meta/systemFields.js';
 import type { DevShadowConfig } from '../config.js';
@@ -175,6 +176,8 @@ export async function enrichRecord(
     // 9. Update _system fields
     const currentSystem = extractSystemHeader(mergedData) || createSystemHeader(head.createdAt);
     const updatedSystem = applySystemHeaderForEnrichment(currentSystem, now, functionId);
+    // Set state to 'new-not-synched' initially
+    updatedSystem.state = 'new-not-synched';
     mergedData = addSystemHeader(mergedData, updatedSystem);
 
     // 10. Externalize base64 properties from enrichment
@@ -221,6 +224,10 @@ export async function enrichRecord(
       size = result.size ?? 0;
       sha256 = result.sha256 || '';
       writtenKeys.push(jKey);
+      
+      // Mark as synced after successful JSON storage
+      const syncedSystemHeader = markAsSynced(updatedSystem);
+      transformed = addSystemHeader(transformed, syncedSystemHeader);
     } catch (error) {
       throw new StorageError(
         `Failed to write item.json: ${error instanceof Error ? error.message : 'Unknown error'}`,

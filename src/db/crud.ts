@@ -24,7 +24,7 @@ import { logger } from '../utils/logger.js';
 // No longer using s3.ts directly - using StorageAdapter interface
 // import { putJSON, del } from '../storage/s3.js';
 import { jsonKey } from '../storage/keys.js';
-import { createSystemHeader, updateSystemHeader, deleteSystemHeader, addSystemHeader, extractSystemHeader } from '../meta/systemFields.js';
+import { createSystemHeader, updateSystemHeader, deleteSystemHeader, addSystemHeader, extractSystemHeader, markAsSynced } from '../meta/systemFields.js';
 import type { DevShadowConfig } from '../config.js';
 import { TransactionLockManager, withTransactionLock } from './transactionLock.js';
 
@@ -312,7 +312,7 @@ export async function createItem(
           ...(opts.parentRecord && { parentRecord: opts.parentRecord }),
           ...(opts.origin && { origin: opts.origin }),
         } : undefined;
-        const systemHeader = createSystemHeader(now, lineageInfo);
+        const systemHeader = createSystemHeader(now, lineageInfo, 'new-not-synched');
         transformed = addSystemHeader(transformed, systemHeader);
 
         // 8. Write item.json to S3
@@ -333,6 +333,10 @@ export async function createItem(
           size = result.size ?? 0;
           sha256 = result.sha256 || '';
           writtenKeys.push(jKey);
+          
+          // Mark as synced after successful JSON storage
+          const syncedSystemHeader = markAsSynced(systemHeader);
+          transformed = addSystemHeader(transformed, syncedSystemHeader);
         } catch (error) {
           throw new StorageError(
             `Failed to write item.json: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -612,7 +616,7 @@ export async function updateItem(
         }
 
         // 9.5. Add system fields
-        const systemHeader = updateSystemHeader(extractSystemHeader(transformed) || createSystemHeader(head.createdAt), now);
+        const systemHeader = updateSystemHeader(extractSystemHeader(transformed) || createSystemHeader(head.createdAt), now, 'new-not-synched');
         transformed = addSystemHeader(transformed, systemHeader);
 
         // 10. Write item.json to S3
@@ -625,6 +629,10 @@ export async function updateItem(
           size = result.size ?? 0;
           sha256 = result.sha256 || '';
           writtenKeys.push(jKey);
+          
+          // Mark as synced after successful JSON storage
+          const syncedSystemHeader = markAsSynced(systemHeader);
+          transformed = addSystemHeader(transformed, syncedSystemHeader);
         } catch (error) {
           throw new StorageError(
             `Failed to write item.json: ${error instanceof Error ? error.message : 'Unknown error'}`,

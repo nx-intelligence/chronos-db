@@ -8,6 +8,7 @@ import { MongoClient } from 'mongodb';
 import { enrichRecord, type EnrichContext, type EnrichOptions, type EnrichResult } from './service/enrich.js';
 import { smartInsert, type SmartInsertOptions, type SmartInsertResult } from './db/smartInsert.js';
 import { health, listBackends, shutdown, type HealthReport, type BackendInfo } from './admin/admin.js';
+import { markItemsAsProcessedByTTL, markItemAsProcessed, type StateTransitionOptions, type StateTransitionResult } from './admin/stateManager.js';
 import { getItem, getLatest, getVersion, getAsOf, query, listByMeta, type ReadContext, type ReadOptions, type QueryOptions, type MetaFilter, type ItemView } from './read/read.js';
 import { FallbackQueue } from './fallback/queue.js';
 import { FallbackWorker, type WorkerOptions } from './fallback/worker.js';
@@ -318,6 +319,24 @@ export interface AdminApi {
    * @returns Prune result
    */
   pruneNow(): Promise<PruneResult>;
+
+  /**
+   * Mark items as processed based on TTL expiration
+   * @param ctx - Route context
+   * @param ttlHours - TTL in hours
+   * @param opts - State transition options
+   * @returns State transition result
+   */
+  markItemsAsProcessedByTTL(ctx: RouteContext, ttlHours: number, opts?: StateTransitionOptions): Promise<StateTransitionResult>;
+
+  /**
+   * Mark a specific item as processed
+   * @param ctx - Route context
+   * @param id - Item ID
+   * @param opts - State transition options
+   * @returns Whether the item was marked as processed
+   */
+  markItemAsProcessed(ctx: RouteContext, id: string, opts?: StateTransitionOptions): Promise<boolean>;
 }
 
 // ============================================================================
@@ -698,6 +717,12 @@ export function initUnifiedDataManager(config: UdmConfig): Udm {
         prunedCounters: 0,
         completedAt: new Date(),
       }),
+      markItemsAsProcessedByTTL: async (ctx: RouteContext, ttlHours: number, opts?: StateTransitionOptions) => {
+        return await markItemsAsProcessedByTTL(router, ctx, ttlHours, opts);
+      },
+      markItemAsProcessed: async (ctx: RouteContext, id: string, opts?: StateTransitionOptions) => {
+        return await markItemAsProcessed(router, ctx, id, opts);
+      },
     },
 
     ...(fallbackQueue && fallbackWorker && writeOptimizer ? {
@@ -799,3 +824,7 @@ export type {
   RollupConfig,
   CollectionMap,
 } from './config.js';
+
+// Re-export state management types and functions
+export type { StateTransitionOptions, StateTransitionResult } from './admin/stateManager.js';
+export { markItemsAsProcessedByTTL, markItemAsProcessed } from './admin/stateManager.js';

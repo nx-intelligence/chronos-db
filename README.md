@@ -311,25 +311,43 @@ await ops.delete(id, expectedOv, 'actor', 'reason');
 
 ---
 
-### 8. **Write Optimization**
+### 8. **System Fields & State Management**
 
-Reduce I/O overhead under load:
+Every record includes comprehensive system tracking:
 
 ```typescript
-const config = {
-  // ... other config
-  writeOptimization: {
-    batchS3: true,              // Batch S3 uploads
-    batchWindowMs: 100,         // 100ms window
-    debounceCountersMs: 1000,   // Update counters every 1s
-    allowShadowSkip: true,      // Skip shadows for heavy ops
-  },
-};
+{
+  "_system": {
+    "insertedAt": "2025-10-01T12:00:00Z",
+    "updatedAt": "2025-10-01T12:30:00Z",
+    "deletedAt": "2025-10-01T13:00:00Z",
+    "deleted": false,
+    "functionIds": ["scorer@v1", "enricher@v2"],
+    "state": "new"  // NEW: Data sync and TTL state
+  }
+}
+```
 
-// Monitor optimizer
-const stats = udm.fallback?.getOptimizerStats();
-console.log('S3 queue:', stats.s3QueueSize);
-console.log('Counter queue:', stats.counterQueueSize);
+**State Values:**
+- `"new-not-synched"` - Data exists only in MongoDB record, not synced to JSON storage
+- `"new"` - Data is synced to JSON storage but hasn't passed TTL
+- `"processed"` - Data has passed TTL, some data may only exist in JSON storage
+
+**State Management:**
+```typescript
+// Mark items as processed based on TTL expiration
+const result = await udm.admin.markItemsAsProcessedByTTL(
+  { dbName: 'myapp', collection: 'users' },
+  24, // TTL in hours
+  { confirm: true, dryRun: false }
+);
+
+// Mark specific item as processed
+const marked = await udm.admin.markItemAsProcessed(
+  { dbName: 'myapp', collection: 'users' },
+  'item-id',
+  { confirm: true }
+);
 ```
 
 ---

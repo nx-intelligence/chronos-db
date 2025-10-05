@@ -1,6 +1,8 @@
 /**
- * Logging utility for chronos-db with 5 log levels and environment variable support
+ * Logging utility for chronos-db with 5 log levels and logs-gateway integration
  */
+
+import { createLogger, LogsGateway, LoggingConfig } from 'logs-gateway';
 
 export enum LogLevel {
   ERROR = 0,
