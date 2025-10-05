@@ -352,6 +352,48 @@ const marked = await udm.admin.markItemAsProcessed(
 
 ---
 
+### 9. **Collection Maps & Auto-Indexing**
+
+chronos-db supports flexible collection mapping with automatic indexing:
+
+```typescript
+// Option 1: No collection map - all properties are automatically indexed
+const udm = initUnifiedDataManager({
+  mongoUris: ['mongodb://localhost:27017'],
+  localStorage: { enabled: true, basePath: './data' },
+  // No collectionMaps defined - all properties are indexed automatically
+});
+
+// Option 2: Explicit collection map for specific collections
+const udm = initUnifiedDataManager({
+  mongoUris: ['mongodb://localhost:27017'],
+  localStorage: { enabled: true, basePath: './data' },
+  collectionMaps: {
+    users: {
+      indexedProps: ['email', 'status'], // Only these are indexed
+      validation: {
+        requiredIndexed: ['email'], // Required fields
+      },
+    },
+    // Other collections without maps will auto-index all properties
+  },
+});
+```
+
+**Auto-Indexing Behavior:**
+- **No collection map**: All properties are automatically indexed (except `_system`)
+- **Empty `indexedProps`**: All properties are indexed
+- **Specified `indexedProps`**: Only listed properties are indexed
+- **Required fields**: Only validated if explicitly defined
+
+**Benefits:**
+- ✅ **Zero configuration** for simple use cases
+- ✅ **Gradual adoption** - add maps only when needed
+- ✅ **Full control** when required for complex schemas
+- ✅ **Performance optimization** - index only what you need
+
+---
+
 ## 🏗️ Architecture
 
 ### Data Flow

@@ -26,6 +26,17 @@ export function extractIndexed(
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   
+  // If indexedProps is empty, index all properties (except _system)
+  if (map.indexedProps.length === 0) {
+    for (const [key, value] of Object.entries(data)) {
+      if (key !== '_system' && value !== undefined) {
+        result[key] = value;
+      }
+    }
+    return result;
+  }
+  
+  // Otherwise, only extract specified properties
   for (const propPath of map.indexedProps) {
     const value = getNestedValue(data, propPath);
     if (value !== undefined) {

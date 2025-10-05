@@ -237,23 +237,18 @@ export async function createItem(
 
     // 2. Get collection map and validate
     const collectionMap = getCollectionMap(ctx.collection);
-    if (!collectionMap) {
-      throw new ValidationError(
-        `Collection map not found for ${ctx.collection}`,
-        op,
-        ctx.collection
-      );
-    }
-
-    // 3. Validate required fields
-    try {
-      validateRequiredIndexed(data, collectionMap);
-    } catch (error) {
-      throw new ValidationError(
-        `Validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        op,
-        ctx.collection
-      );
+    
+    // 3. Validate required fields (only if collection map has required fields)
+    if (collectionMap.validation?.requiredIndexed?.length > 0) {
+      try {
+        validateRequiredIndexed(data, collectionMap);
+      } catch (error) {
+        throw new ValidationError(
+          `Validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          op,
+          ctx.collection
+        );
+      }
     }
 
     // 4. Generate IDs and version
@@ -920,13 +915,21 @@ export async function deleteItem(
 /**
  * Get collection map for a collection name
  * @param collectionName - Collection name
- * @returns Collection map or null if not found
+ * @returns Collection map or default map with all properties indexed
  */
-function getCollectionMap(_collectionName: string): any {
-  // This would be implemented to get the collection map from config
-  // For now, return an empty map with NO hardcoded requirements
+function getCollectionMap(collectionName: string): any {
+  // Try to get collection map from global config
+  const globalConfig = getGlobalConfig();
+  const collectionMap = globalConfig?.collectionMaps?.[collectionName];
+  
+  if (collectionMap) {
+    return collectionMap;
+  }
+  
+  // If no collection map is defined, return a default map that indexes all properties
+  // This means all properties will be considered indexed/mapped
   return {
-    indexedProps: [],
+    indexedProps: [], // Empty array means all properties are indexed
     base64Props: {},
     validation: {
       requiredIndexed: [],

@@ -9,6 +9,7 @@ import { enrichRecord, type EnrichContext, type EnrichOptions, type EnrichResult
 import { smartInsert, type SmartInsertOptions, type SmartInsertResult } from './db/smartInsert.js';
 import { health, listBackends, shutdown, type HealthReport, type BackendInfo } from './admin/admin.js';
 import { markItemsAsProcessedByTTL, markItemAsProcessed, type StateTransitionOptions, type StateTransitionResult } from './admin/stateManager.js';
+import { ensureBucketsExist, testS3Connectivity, validateSpacesConfiguration, type BucketManagerOptions, type BucketManagerResult } from './admin/bucketManager.js';
 import { getItem, getLatest, getVersion, getAsOf, query, listByMeta, type ReadContext, type ReadOptions, type QueryOptions, type MetaFilter, type ItemView } from './read/read.js';
 import { FallbackQueue } from './fallback/queue.js';
 import { FallbackWorker, type WorkerOptions } from './fallback/worker.js';
@@ -337,6 +338,32 @@ export interface AdminApi {
    * @returns Whether the item was marked as processed
    */
   markItemAsProcessed(ctx: RouteContext, id: string, opts?: StateTransitionOptions): Promise<boolean>;
+
+  /**
+   * Ensure required buckets exist for a collection
+   * @param ctx - Route context
+   * @param opts - Bucket manager options
+   * @returns Bucket manager result
+   */
+  ensureBucketsExist(ctx: RouteContext, opts?: BucketManagerOptions): Promise<BucketManagerResult>;
+
+  /**
+   * Test S3 connectivity and list available buckets
+   * @param ctx - Route context
+   * @returns Connectivity test result
+   */
+  testS3Connectivity(ctx: RouteContext): Promise<{ success: boolean; buckets: string[]; error?: string }>;
+
+  /**
+   * Validate S3 configuration for DigitalOcean Spaces
+   * @param ctx - Route context
+   * @returns Validation result
+   */
+  validateSpacesConfiguration(ctx: RouteContext): Promise<{
+    valid: boolean;
+    issues: string[];
+    recommendations: string[];
+  }>;
 }
 
 // ============================================================================
@@ -723,6 +750,15 @@ export function initUnifiedDataManager(config: UdmConfig): Udm {
       markItemAsProcessed: async (ctx: RouteContext, id: string, opts?: StateTransitionOptions) => {
         return await markItemAsProcessed(router, ctx, id, opts);
       },
+      ensureBucketsExist: async (ctx: RouteContext, opts?: BucketManagerOptions) => {
+        return await ensureBucketsExist(router, ctx, opts);
+      },
+      testS3Connectivity: async (ctx: RouteContext) => {
+        return await testS3Connectivity(router, ctx);
+      },
+      validateSpacesConfiguration: async (ctx: RouteContext) => {
+        return await validateSpacesConfiguration(router, ctx);
+      },
     },
 
     ...(fallbackQueue && fallbackWorker && writeOptimizer ? {
@@ -828,3 +864,7 @@ export type {
 // Re-export state management types and functions
 export type { StateTransitionOptions, StateTransitionResult } from './admin/stateManager.js';
 export { markItemsAsProcessedByTTL, markItemAsProcessed } from './admin/stateManager.js';
+
+// Re-export bucket management types and functions
+export type { BucketManagerOptions, BucketManagerResult, BucketStatus } from './admin/bucketManager.js';
+export { ensureBucketsExist, testS3Connectivity, validateSpacesConfiguration } from './admin/bucketManager.js';

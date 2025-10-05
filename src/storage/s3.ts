@@ -134,6 +134,17 @@ export async function putJSON(
       etag: result.ETag,
     };
   } catch (error) {
+    if (error instanceof Error) {
+      if (error.name === 'NoSuchBucket') {
+        throw new Error(`Bucket '${bucket}' does not exist. Please create the bucket or check your configuration.`);
+      } else if (error.name === 'AccessDenied') {
+        throw new Error(`Access denied to bucket '${bucket}'. Please check your credentials and permissions.`);
+      } else if (error.name === 'InvalidBucketName') {
+        throw new Error(`Invalid bucket name '${bucket}'. Bucket names must be DNS-compliant.`);
+      } else if (error.name === 'BucketAlreadyExists') {
+        throw new Error(`Bucket '${bucket}' already exists in another region.`);
+      }
+    }
     throw new Error(`Failed to put JSON to S3: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
@@ -175,6 +186,15 @@ export async function getJSON(
     
     return JSON.parse(jsonString);
   } catch (error) {
+    if (error instanceof Error) {
+      if (error.name === 'NoSuchKey') {
+        throw new Error(`Object '${key}' not found in bucket '${bucket}'.`);
+      } else if (error.name === 'NoSuchBucket') {
+        throw new Error(`Bucket '${bucket}' does not exist. Please create the bucket or check your configuration.`);
+      } else if (error.name === 'AccessDenied') {
+        throw new Error(`Access denied to object '${key}' in bucket '${bucket}'. Please check your credentials and permissions.`);
+      }
+    }
     throw new Error(`Failed to get JSON from S3: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }

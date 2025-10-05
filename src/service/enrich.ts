@@ -25,6 +25,7 @@ import {
   markAsSynced,
   type SystemHeader 
 } from '../meta/systemFields.js';
+import { getGlobalConfig } from '../config/global.js';
 import type { DevShadowConfig } from '../config.js';
 
 // ============================================================================
@@ -380,10 +381,19 @@ function isValidEnrichmentPayload(
 /**
  * Get collection map (placeholder - should be implemented)
  */
-function getCollectionMap(_collection: string): any {
-  // TODO: Implement collection map lookup
+function getCollectionMap(collection: string): any {
+  // Try to get collection map from global config
+  const globalConfig = getGlobalConfig();
+  const collectionMap = globalConfig?.collectionMaps?.[collection];
+  
+  if (collectionMap) {
+    return collectionMap;
+  }
+  
+  // If no collection map is defined, return a default map that indexes all properties
+  // This means all properties will be considered indexed/mapped
   return {
-    indexedProps: [],
+    indexedProps: [], // Empty array means all properties are indexed
     base64Props: {},
     validation: {
       requiredIndexed: []
