@@ -261,8 +261,8 @@ interface LocalStorageConfig {
 
 ### Other Configuration
 
-#### `counters` (Required)
-Counters database configuration.
+#### `counters` (Optional)
+Counters database configuration (optional - skips counter functionality if not provided).
 
 ```typescript
 interface CountersConfig {
@@ -270,6 +270,8 @@ interface CountersConfig {
   dbName: string;         // Database name for counters
 }
 ```
+
+**Note:** Counters only work on the `runtime` database type. Operations on `metadata`, `knowledge`, and `logs` databases will not trigger counter updates.
 
 #### `routing` (Optional)
 Routing configuration.
@@ -386,6 +388,28 @@ interface CountersRulesConfig {
   }>;
 }
 ```
+
+#### `logicalDelete` (Optional)
+Logical delete configuration.
+
+```typescript
+interface LogicalDeleteConfig {
+  enabled: boolean;       // Whether logical delete is enabled (default: true)
+}
+```
+
+**Note:** When enabled (default), delete operations set `deletedAt` timestamp instead of removing records. When disabled, delete operations perform hard deletes.
+
+#### `versioning` (Optional)
+Versioning configuration.
+
+```typescript
+interface VersioningConfig {
+  enabled: boolean;       // Whether versioning is enabled (default: true)
+}
+```
+
+**Note:** When enabled (default), all operations create version documents for time-travel queries. When disabled, only head documents are maintained.
 
 #### `hardDeleteEnabled` (Optional)
 Enable hard delete functionality.

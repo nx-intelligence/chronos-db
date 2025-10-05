@@ -511,9 +511,12 @@ export function initChronos(config: ChronosConfig): Chronos {
   });
   logger.debug('BridgeRouter initialized successfully');
 
-  // Initialize counters
+  // Initialize counters (only if config provided)
   let countersRepo: CounterTotalsRepo | null = null;
   const initCounters = async () => {
+    if (!config.counters) {
+      return null; // Skip counters if not configured
+    }
     if (!countersRepo) {
       const countersClient = new MongoClient(config.counters.mongoUri);
       await countersClient.connect();
@@ -726,10 +729,16 @@ export function initChronos(config: ChronosConfig): Chronos {
     counters: {
       getTotals: async (query) => {
         const repo = await initCounters();
+        if (!repo) {
+          throw new Error('Counters not configured - add counters config to enable this functionality');
+        }
         return await repo.getTotals(query);
       },
       resetTotals: async (query) => {
         const repo = await initCounters();
+        if (!repo) {
+          throw new Error('Counters not configured - add counters config to enable this functionality');
+        }
         await repo.resetTotals(query);
       },
     },

@@ -213,6 +213,22 @@ export interface WriteOptimizationConfig {
 }
 
 /**
+ * Logical delete configuration
+ */
+export interface LogicalDeleteConfig {
+  /** Whether logical delete is enabled (default: true) */
+  enabled: boolean;
+}
+
+/**
+ * Versioning configuration
+ */
+export interface VersioningConfig {
+  /** Whether versioning is enabled (default: true) */
+  enabled: boolean;
+}
+
+/**
  * Transaction configuration
  */
 export interface TransactionConfig {
@@ -239,8 +255,8 @@ export interface ChronosConfig {
   spacesConns?: SpacesConnConfig[] | undefined;
   /** Local filesystem storage (for development/testing, NOT recommended for production) */
   localStorage?: LocalStorageConfig | undefined;
-  /** Separate MongoDB connection for counters */
-  counters: CountersConfig;
+  /** Separate MongoDB connection for counters (optional - skips counter functionality if not provided) */
+  counters?: CountersConfig;
   /** How to route requests across backends */
   routing: RoutingConfig;
   /** Retention policies for versions and counters (optional, defaults to disabled) */
@@ -261,6 +277,10 @@ export interface ChronosConfig {
   writeOptimization?: WriteOptimizationConfig | undefined;
   /** Transaction configuration */
   transactions?: TransactionConfig | undefined;
+  /** Logical delete configuration */
+  logicalDelete?: LogicalDeleteConfig | undefined;
+  /** Versioning configuration */
+  versioning?: VersioningConfig | undefined;
 }
 
 /**

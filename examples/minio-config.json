@@ -40,10 +40,6 @@
       "forcePathStyle": true
     }
   ],
-  "counters": {
-    "mongoUri": "mongodb://localhost:27017/chronos_counters",
-    "dbName": "chronos_counters"
-  },
   "routing": {
     "hashAlgo": "rendezvous",
     "chooseKey": "tenantId|dbName"
@@ -59,14 +55,14 @@
   "collectionMaps": {
     "testDocuments": {
       "indexedProps": ["testId", "category"],
-      "base64Props": { 
-        "data": { 
+      "base64Props": {
+        "data": {
           "contentType": "application/octet-stream",
           "preferredText": false
-        } 
+        }
       },
-      "validation": { 
-        "requiredIndexed": ["testId"] 
+      "validation": {
+        "requiredIndexed": ["testId"]
       }
     }
   },
@@ -74,6 +70,12 @@
     "enabled": true,
     "ttlHours": 12,
     "maxBytesPerDoc": 524288
+  },
+  "logicalDelete": {
+    "enabled": true
+  },
+  "versioning": {
+    "enabled": true
   },
   "fallback": {
     "enabled": false

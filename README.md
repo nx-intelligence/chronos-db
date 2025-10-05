@@ -73,6 +73,7 @@ const chronos = initChronos({
       backup: 'chronos-backups'
     }
   }],
+  // Counters (optional - only works on runtime tier)
   counters: {
     mongoUri: 'mongodb://localhost:27017',
     dbName: 'chronos_counters',
@@ -284,6 +285,16 @@ interface ChronosConfig {
     enabled: boolean;
     ttlHours: number;
     maxBytesPerDoc?: number;
+  };
+  
+  // Optional: Logical delete (default: enabled)
+  logicalDelete?: {
+    enabled: boolean;  // Set to false for hard deletes (default: true)
+  };
+  
+  // Optional: Versioning (default: enabled)
+  versioning?: {
+    enabled: boolean;  // Set to false to disable time-travel (default: true)
   };
   
   // Optional: Hard delete capability
@@ -1129,6 +1140,34 @@ Built with:
 - **Direct keys** (`key: 'runtime-tenant-a'`) - Use when you know the exact database connection and want maximum performance
 - **Tenant-based routing** (`databaseType: 'runtime', tenantId: 'tenant-a'`) - Use when you want to route based on tenant context
 - **Logs database** (`key: 'logs-main'`) - Use for system logs and audit trails (no tiers)
+
+### **Q: How do I disable logical delete and use hard deletes instead?**
+**A:** Set `logicalDelete.enabled: false` in your configuration:
+```typescript
+const chronos = initChronos({
+  // ... other config
+  logicalDelete: {
+    enabled: false  // This will perform hard deletes instead of logical deletes
+  }
+});
+```
+
+### **Q: How do I disable versioning to save storage space?**
+**A:** Set `versioning.enabled: false` in your configuration:
+```typescript
+const chronos = initChronos({
+  // ... other config
+  versioning: {
+    enabled: false  // This disables time-travel queries and version storage
+  }
+});
+```
+
+### **Q: What's the difference between logical delete and hard delete?**
+**A:**
+- **Logical delete** (default): Sets `deletedAt` timestamp, records remain in database but are hidden from queries
+- **Hard delete**: Permanently removes records from both MongoDB and S3 storage
+- **Hard delete capability**: Enables the `admin.hardDelete()` API for irreversible deletion
 
 ### **Q: Can I mix different routing methods in the same application?**
 **A:** Yes! You can use different routing methods for different operations:

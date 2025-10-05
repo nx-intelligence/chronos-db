@@ -150,17 +150,19 @@ export async function hardDeleteItem(
         await repos.deleteHead(objectId, session!);
       }
 
-      // Update counters
-      const countersRepo = new CounterTotalsRepo(mongo, []);
-      await countersRepo.bumpTotals({
-        scope: {
-          dbName: ctx.dbName,
-          collection: ctx.collection,
-          ...(ctx.tenantId && { tenantId: ctx.tenantId }),
-        },
-        op: 'DELETE',
-        metaIndexed: head?.metaIndexed || {},
-      });
+      // Update counters (only for runtime tier)
+      if (ctx.databaseType === 'runtime') {
+        const countersRepo = new CounterTotalsRepo(mongo, []);
+        await countersRepo.bumpTotals({
+          scope: {
+            dbName: ctx.dbName,
+            collection: ctx.collection,
+            ...(ctx.tenantId && { tenantId: ctx.tenantId }),
+          },
+          op: 'DELETE',
+          metaIndexed: head?.metaIndexed || {},
+        });
+      }
     });
   } catch (error) {
     throw new TxnError(

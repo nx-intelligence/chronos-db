@@ -70,6 +70,16 @@ const chronos = initChronos({
     dbName: 'chronos_counters'
   },
   
+  // Optional: Logical delete (default: enabled)
+  logicalDelete: {
+    enabled: true,  // Set to false for hard deletes
+  },
+  
+  // Optional: Versioning (default: enabled)
+  versioning: {
+    enabled: true,  // Set to false to disable time-travel
+  },
+  
   // Optional: Collection maps
   collectionMaps: {
     users: { indexedProps: ['email'] }

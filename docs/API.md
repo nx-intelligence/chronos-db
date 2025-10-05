@@ -138,18 +138,25 @@ await ops.update(
 
 ### `ops.delete(id, expectedOv?, actor?, reason?)`
 
-Logically delete a record (hidden by default).
+Delete an item (logical deletion by default).
 
 **Parameters:**
-- `id` (string) - Record ID
-- `expectedOv` (number, optional) - Expected version
-- `actor` (string, optional) - Who
-- `reason` (string, optional) - Why
+- `id` (string) - Item ID
+- `expectedOv` (number, optional) - Expected object version for optimistic locking
+- `actor` (string, optional) - Actor performing the operation
+- `reason` (string, optional) - Reason for deletion
 
-**Returns:** `Promise<DeleteResult>`
+**Returns:** `Promise<DeleteResult>` - Delete result with timestamp
+
+**Note:** By default, this performs logical delete (sets `deletedAt`). To use hard deletes, configure `logicalDelete.enabled: false`.
 
 ```javascript
+// Logical delete (default)
 await ops.delete(id, currentOv, 'admin', 'user requested');
+
+// Hard delete (if configured)
+// Set logicalDelete.enabled: false in config
+await ops.delete(id, currentOv, 'admin', 'permanent removal');
 
 // Result: { id, ov, cv, deletedAt }
 ```
@@ -427,6 +434,42 @@ import {
 const config: ChronosConfig = { /* ... */ };
 const chronos = initChronos(config);
 ```
+
+---
+
+## Configuration Options
+
+### Logical Delete Configuration
+
+Control whether delete operations perform logical or hard deletes:
+
+```typescript
+const chronos = initChronos({
+  // ... other config
+  logicalDelete: {
+    enabled: true  // Default: true (logical delete)
+  }
+});
+```
+
+- **`enabled: true`** (default): Delete operations set `deletedAt` timestamp, records remain in database
+- **`enabled: false`**: Delete operations permanently remove records from MongoDB and S3
+
+### Versioning Configuration
+
+Control whether operations create version documents for time-travel queries:
+
+```typescript
+const chronos = initChronos({
+  // ... other config
+  versioning: {
+    enabled: true  // Default: true (versioning enabled)
+  }
+});
+```
+
+- **`enabled: true`** (default): All operations create version documents, enabling time-travel queries
+- **`enabled: false`**: Only head documents are maintained, no time-travel capability
 
 ---
 

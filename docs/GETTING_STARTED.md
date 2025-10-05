@@ -54,6 +54,16 @@ const chronos = initChronos({
     counters: { days: 30, weeks: 12, months: 6 },
   },
   
+  // Optional: Logical delete (default: enabled)
+  logicalDelete: {
+    enabled: true,  // Set to false for hard deletes
+  },
+  
+  // Optional: Versioning (default: enabled)
+  versioning: {
+    enabled: true,  // Set to false to disable time-travel
+  },
+  
   // Collection maps
   collectionMaps: {
     users: { indexedProps: ['email'] }

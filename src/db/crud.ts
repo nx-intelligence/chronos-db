@@ -27,6 +27,78 @@ import { jsonKey } from '../storage/keys.js';
 import { createSystemHeader, updateSystemHeader, deleteSystemHeader, addSystemHeader, extractSystemHeader, markAsSynced } from '../meta/systemFields.js';
 import type { DevShadowConfig } from '../config.js';
 import { TransactionLockManager, withTransactionLock } from './transactionLock.js';
+import { CounterTotalsRepo } from '../counters/counters.js';
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Check if logical delete is enabled
+ */
+function isLogicalDeleteEnabled(): boolean {
+  const config = getGlobalConfig();
+  return config.logicalDelete?.enabled !== false; // Default to true
+}
+
+/**
+ * Check if versioning is enabled
+ */
+function isVersioningEnabled(): boolean {
+  const config = getGlobalConfig();
+  return config.versioning?.enabled !== false; // Default to true
+}
+
+/**
+ * Check if counters should be called for this context
+ * Counters only work on runtime tier
+ */
+function shouldCallCounters(ctx: RouteContext): boolean {
+  // Only call counters for runtime database type
+  return ctx.databaseType === 'runtime';
+}
+
+/**
+ * Bump counters if configured and applicable
+ */
+async function bumpCountersIfNeeded(
+  ctx: RouteContext,
+  op: 'CREATE' | 'UPDATE' | 'DELETE',
+  metaIndexed?: Record<string, unknown>
+): Promise<void> {
+  if (!shouldCallCounters(ctx)) {
+    return; // Skip counters for non-runtime tiers
+  }
+
+  const config = getGlobalConfig();
+  if (!config.counters) {
+    return; // Skip counters if not configured
+  }
+
+  try {
+    // Initialize counters repo
+    const { MongoClient } = await import('mongodb');
+    const countersClient = new MongoClient(config.counters.mongoUri);
+    await countersClient.connect();
+    const countersDb = countersClient.db(config.counters.dbName);
+    const countersRepo = new CounterTotalsRepo(countersDb, config.counterRules?.rules || []);
+    
+    await countersRepo.bumpTotals({
+      scope: {
+        dbName: ctx.dbName,
+        collection: ctx.collection,
+        ...(ctx.tenantId && { tenant: ctx.tenantId }),
+      },
+      op,
+      metaIndexed: metaIndexed || {},
+    });
+
+    await countersClient.close();
+  } catch (error) {
+    // Log error but don't throw - counters should never break CRUD
+    console.error('Failed to bump counters:', error);
+  }
+}
 
 // ============================================================================
 // Types
@@ -354,22 +426,33 @@ export async function createItem(
             // Increment collection version
             cv = await repos.incCv(session);
 
-            // Create version document
-            const verDoc: VerDoc = {
-              _id: new ObjectId(),
-              itemId: id,
-              ov,
-              cv,
-              op: 'CREATE',
-              at: now,
-              ...(actor && { actor }),
-              ...(reason && { reason }),
-              jsonBucket: spaces.buckets.json,
-              jsonKey: jKey,
-              metaIndexed,
-              size: size ?? 0,
-              checksum: sha256,
-            };
+            // Create version document (only if versioning is enabled)
+            if (isVersioningEnabled()) {
+              const verDoc: VerDoc = {
+                _id: new ObjectId(),
+                itemId: id,
+                ov,
+                cv,
+                op: 'CREATE',
+                at: now,
+                ...(actor && { actor }),
+                ...(reason && { reason }),
+                jsonBucket: spaces.buckets.json,
+                jsonKey: jKey,
+                metaIndexed,
+                size: size ?? 0,
+                checksum: sha256,
+              };
+
+              // VERBOSE: Log MongoDB operations
+              logger.mongoOperation('insertVersion', ctx.collection, undefined, verDoc, undefined, {
+                operation: 'CREATE',
+                itemId: idHex
+              });
+
+              // Insert version document
+              await repos.insertVersion(verDoc, session);
+            }
 
             // Create head document
             const headDoc: HeadDoc = {
@@ -403,18 +486,12 @@ export async function createItem(
             }
 
             // VERBOSE: Log MongoDB operations
-            logger.mongoOperation('insertVersion', ctx.collection, undefined, verDoc, undefined, {
-              operation: 'CREATE',
-              itemId: idHex
-            });
-            
             logger.mongoOperation('upsertHead', ctx.collection, undefined, headDoc, undefined, {
               operation: 'CREATE',
               itemId: idHex
             });
 
-            // Insert documents
-            await repos.insertVersion(verDoc, session);
+            // Insert head document
             await repos.upsertHead(headDoc, session);
           });
         } catch (error) {
@@ -447,6 +524,9 @@ export async function createItem(
           durationMs: duration,
           collection: ctx.collection
         });
+        
+        // 11. Bump counters if applicable (runtime tier only)
+        await bumpCountersIfNeeded(ctx, 'CREATE', metaIndexed);
         
         return result;
       }
@@ -646,23 +726,28 @@ export async function updateItem(
             // Increment collection version
             cv = await repos.incCv(session);
 
-            // Create version document
-            const verDoc: VerDoc = {
-              _id: new ObjectId(),
-              itemId: new ObjectId(id),
-              ov,
-              cv,
-              op: 'UPDATE',
-              at: now,
-              ...(actor && { actor }),
-              ...(reason && { reason }),
-              jsonBucket: spaces.buckets.json,
-              jsonKey: jKey,
-              metaIndexed,
-              size: size ?? 0,
-              checksum: sha256,
-              prevOv: head.ov,
-            };
+            // Create version document (only if versioning is enabled)
+            if (isVersioningEnabled()) {
+              const verDoc: VerDoc = {
+                _id: new ObjectId(),
+                itemId: new ObjectId(id),
+                ov,
+                cv,
+                op: 'UPDATE',
+                at: now,
+                ...(actor && { actor }),
+                ...(reason && { reason }),
+                jsonBucket: spaces.buckets.json,
+                jsonKey: jKey,
+                metaIndexed,
+                size: size ?? 0,
+                checksum: sha256,
+                prevOv: head.ov,
+              };
+
+              // Insert version document
+              await repos.insertVersion(verDoc, session);
+            }
 
             // Update head document
             const headDoc: HeadDoc = {
@@ -695,8 +780,7 @@ export async function updateItem(
               }
             }
 
-            // Insert version and update head with optimistic lock
-            await repos.insertVersion(verDoc, session);
+            // Update head with optimistic lock
             await repos.updateHeadWithLock(headDoc, head.ov, session);
           });
         } catch (error) {
@@ -714,12 +798,17 @@ export async function updateItem(
         }
 
         // 12. Return result
-        return {
+        const result = {
           id,
           ov,
           cv: cv!,
           updatedAt: now,
         };
+        
+        // 13. Bump counters if applicable (runtime tier only)
+        await bumpCountersIfNeeded(ctx, 'UPDATE', metaIndexed);
+        
+        return result;
       }
     );
 
@@ -823,55 +912,74 @@ export async function deleteItem(
             // Increment collection version
             cv = await repos.incCv(session);
 
-            // Create version document (tombstone with previous snapshot)
-            const verDoc: VerDoc = {
-              _id: new ObjectId(),
-              itemId: new ObjectId(id),
-              ov,
-              cv,
-              op: 'DELETE',
-              at: now,
-              ...(actor && { actor }),
-              ...(reason && { reason }),
-              jsonBucket: head.jsonBucket,
-              jsonKey: head.jsonKey, // Reference previous snapshot
-              metaIndexed: head.metaIndexed,
-              size: head.size,
-              checksum: head.checksum,
-              prevOv: head.ov,
-            };
-
-            // Update head document with deletion timestamp
-            const headDoc: HeadDoc = {
-              ...head,
-              ov,
-              cv,
-              updatedAt: now,
-              deletedAt: now,
-            };
-
-            // Add dev shadow if enabled
-            if (config?.devShadow?.enabled || opts.devShadowOverride) {
-              // For delete, we need to get the previous data and mark it as deleted
-              const previousData = head.fullShadow?.data || {};
-              const systemHeader = deleteSystemHeader(extractSystemHeader(previousData) || createSystemHeader(head.createdAt), now);
-              const shadowData = addSystemHeader(previousData, systemHeader);
-              const shadowBytes = JSON.stringify(shadowData).length;
-              const maxBytes = config?.devShadow?.maxBytesPerDoc;
-              
-              if (!maxBytes || shadowBytes <= maxBytes) {
-                headDoc.fullShadow = {
+            // Handle deletion based on logical delete configuration
+            if (isLogicalDeleteEnabled()) {
+              // Logical delete: create version document and update head with deletedAt
+              if (isVersioningEnabled()) {
+                const verDoc: VerDoc = {
+                  _id: new ObjectId(),
+                  itemId: new ObjectId(id),
                   ov,
+                  cv,
+                  op: 'DELETE',
                   at: now,
-                  data: shadowData,
-                  bytes: shadowBytes,
+                  ...(actor && { actor }),
+                  ...(reason && { reason }),
+                  jsonBucket: head.jsonBucket,
+                  jsonKey: head.jsonKey, // Reference previous snapshot
+                  metaIndexed: head.metaIndexed,
+                  size: head.size,
+                  checksum: head.checksum,
+                  prevOv: head.ov,
                 };
-              }
-            }
 
-            // Insert version and update head with optimistic lock
-            await repos.insertVersion(verDoc, session);
-            await repos.updateHeadWithLock(headDoc, head.ov, session);
+                // Insert version document
+                await repos.insertVersion(verDoc, session);
+              }
+
+              // Update head document with deletion timestamp
+              const headDoc: HeadDoc = {
+                ...head,
+                ov,
+                cv,
+                updatedAt: now,
+                deletedAt: now,
+              };
+
+              // Add dev shadow if enabled
+              if (config?.devShadow?.enabled || opts.devShadowOverride) {
+                // For delete, we need to get the previous data and mark it as deleted
+                const previousData = head.fullShadow?.data || {};
+                const systemHeader = deleteSystemHeader(extractSystemHeader(previousData) || createSystemHeader(head.createdAt), now);
+                const shadowData = addSystemHeader(previousData, systemHeader);
+                const shadowBytes = JSON.stringify(shadowData).length;
+                const maxBytes = config?.devShadow?.maxBytesPerDoc;
+                
+                if (!maxBytes || shadowBytes <= maxBytes) {
+                  headDoc.fullShadow = {
+                    ov,
+                    at: now,
+                    data: shadowData,
+                    bytes: shadowBytes,
+                  };
+                }
+              }
+
+              // Update head with optimistic lock
+              await repos.updateHeadWithLock(headDoc, head.ov, session);
+            } else {
+              // Hard delete: actually remove the documents
+              if (isVersioningEnabled()) {
+                // Delete all versions
+                const versions = await repos.getVerByItemId(new ObjectId(id));
+                for (const version of versions) {
+                  await repos.deleteVersion(version._id, session);
+                }
+              }
+
+              // Delete head document
+              await repos.deleteHead(new ObjectId(id), session);
+            }
           });
         } catch (error) {
           throw new TxnError(
@@ -885,12 +993,17 @@ export async function deleteItem(
         }
 
         // 8. Return result
-        return {
+        const result = {
           id,
           ov,
           cv: cv!,
           deletedAt: now,
         };
+        
+        // 9. Bump counters if applicable (runtime tier only)
+        await bumpCountersIfNeeded(ctx, 'DELETE', head.metaIndexed);
+        
+        return result;
       }
     );
 

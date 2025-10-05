@@ -347,6 +347,44 @@ If you're upgrading from a previous version of chronos-db:
 
 ---
 
+## Configuration Options Explained
+
+### Logical Delete (`logicalDelete`)
+Controls whether delete operations perform logical or hard deletes:
+
+```json
+{
+  "logicalDelete": {
+    "enabled": true  // Default: true (logical delete)
+  }
+}
+```
+
+- **`enabled: true`** (default): Delete operations set `deletedAt` timestamp, records remain in database
+- **`enabled: false`**: Delete operations permanently remove records from MongoDB and S3
+
+### Versioning (`versioning`)
+Controls whether operations create version documents for time-travel queries:
+
+```json
+{
+  "versioning": {
+    "enabled": true  // Default: true (versioning enabled)
+  }
+}
+```
+
+- **`enabled: true`** (default): All operations create version documents, enabling time-travel queries
+- **`enabled: false`**: Only head documents are maintained, no time-travel capability
+
+### Other Configuration Options
+
+- **`devShadow`** - Development shadow storage for full document snapshots in MongoDB
+- **`fallback`** - Fallback queue configuration for handling failed operations
+- **`transactions`** - Transaction support configuration
+
+---
+
 ## Troubleshooting
 
 ### Common Issues:

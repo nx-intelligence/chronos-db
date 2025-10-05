@@ -37,8 +37,11 @@ await ops.update(user.id, { status: 'active' }, user.ov, 'system', 'email verifi
 // Read latest
 const current = await ops.getLatest(user.id);
 
-// Delete (logical)
+// Delete (logical by default)
 await ops.delete(user.id, current.ov, 'system', 'user deletion');
+
+// For hard deletes, configure logicalDelete.enabled: false
+// await ops.delete(user.id, current.ov, 'system', 'permanent removal');
 ```
 
 ---
@@ -332,6 +335,64 @@ if (!health.s3Backends.every(b => b.ok)) {
 // List backends
 const backends = await chronos.admin.listBackends();
 console.log('Backends:', backends);
+```
+
+---
+
+## Example 4: Configuration Options
+
+### Disable Logical Delete (Use Hard Deletes)
+
+```javascript
+const chronos = initChronos({
+  // ... other config
+  logicalDelete: {
+    enabled: false  // This will perform hard deletes
+  }
+});
+
+const ops = chronos.with({ key: 'runtime-local', collection: 'users' });
+
+// This will permanently remove the record
+await ops.delete('user-id', currentOv, 'admin', 'permanent removal');
+```
+
+### Disable Versioning (Save Storage Space)
+
+```javascript
+const chronos = initChronos({
+  // ... other config
+  versioning: {
+    enabled: false  // This disables time-travel queries
+  }
+});
+
+const ops = chronos.with({ key: 'runtime-local', collection: 'users' });
+
+// Operations will not create version documents
+await ops.create({ name: 'John' }, 'system', 'create');
+await ops.update('user-id', { name: 'Jane' }, currentOv, 'system', 'update');
+
+// Time-travel queries will not work:
+// await ops.getVersion('user-id', { ov: 0 }); // This will fail
+```
+
+### Mixed Configuration
+
+```javascript
+const chronos = initChronos({
+  // ... other config
+  logicalDelete: {
+    enabled: true   // Keep logical deletes
+  },
+  versioning: {
+    enabled: false  // Disable versioning to save space
+  }
+});
+
+// Logical deletes work, but no versioning
+await ops.delete('user-id', currentOv, 'admin', 'soft delete');
+// Time-travel queries disabled
 ```
 
 ---

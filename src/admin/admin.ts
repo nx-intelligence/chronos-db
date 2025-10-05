@@ -13,7 +13,7 @@ export interface HealthReport {
   };
   mongoBackends: Array<{ index: number; ok: boolean; pingMs?: number; error?: string }>;
   s3Backends: Array<{ index: number; ok: boolean; error?: string }>;
-  countersDb: { ok: boolean; pingMs?: number; error?: string };
+  countersDb: { ok: boolean; pingMs?: number; error?: string } | null; // Made optional
 }
 
 export interface BackendInfo {
@@ -86,21 +86,23 @@ export async function health(router: BridgeRouter, config: ChronosConfig): Promi
     })
   );
 
-  // Check counters database
-  let countersDb: { ok: boolean; pingMs?: number; error?: string };
-  try {
-    const start = Date.now();
-    const countersClient = new MongoClient(config.counters.mongoUri);
-    await countersClient.connect();
-    await countersClient.db('admin').admin().ping();
-    const pingMs = Date.now() - start;
-    await countersClient.close();
-    countersDb = { ok: true, pingMs };
-  } catch (error) {
-    countersDb = { 
-      ok: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    };
+  // Check counters database (if configured)
+  let countersDb: { ok: boolean; pingMs?: number; error?: string } | null = null;
+  if (config.counters) {
+    try {
+      const start = Date.now();
+      const countersClient = new MongoClient(config.counters.mongoUri);
+      await countersClient.connect();
+      await countersClient.db('admin').admin().ping();
+      const pingMs = Date.now() - start;
+      await countersClient.close();
+      countersDb = { ok: true, pingMs };
+    } catch (error) {
+      countersDb = { 
+        ok: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      };
+    }
   }
 
   return {
@@ -135,12 +137,14 @@ export async function shutdown(router: BridgeRouter, config: ChronosConfig): Pro
   // Shutdown router (closes all MongoDB connections)
   await router.shutdown();
   
-  // Close counters database connection
-  try {
-    const countersClient = new MongoClient(config.counters.mongoUri);
-    await countersClient.close();
-  } catch (error) {
-    // Log but don't throw - shutdown should be best effort
-    console.error('Failed to close counters database:', error);
+  // Close counters database connection (if configured)
+  if (config.counters) {
+    try {
+      const countersClient = new MongoClient(config.counters.mongoUri);
+      await countersClient.close();
+    } catch (error) {
+      // Log but don't throw - shutdown should be best effort
+      console.error('Failed to close counters database:', error);
+    }
   }
 }

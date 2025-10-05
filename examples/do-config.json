@@ -84,6 +84,12 @@
     "ttlHours": 24,
     "maxBytesPerDoc": 1048576
   },
+  "logicalDelete": {
+    "enabled": true
+  },
+  "versioning": {
+    "enabled": true
+  },
   "fallback": {
     "enabled": true,
     "maxRetries": 3,

@@ -62,6 +62,16 @@ export const CollectionMapSchema = z.object({
   }).optional(),
 });
 
+// Logical delete configuration schema
+export const LogicalDeleteConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+});
+
+// Versioning configuration schema
+export const VersioningConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+});
+
 // MongoDB connection schema
 export const MongoConnSchema = z.object({
   key: z.string().min(1, 'MongoDB connection key is required'),
@@ -99,7 +109,7 @@ export const ChronosConfigSchema = z.object({
   counters: z.object({ 
     mongoUri: z.string().min(1, 'Counters MongoDB URI is required'), 
     dbName: z.string().min(1, 'Counters database name is required') 
-  }),
+  }).optional(), // Made optional
   routing: RoutingSchema.default({ hashAlgo: 'rendezvous' }),
   retention: RetentionSchema.default({}),
   rollup: z.any().optional(),
@@ -114,6 +124,8 @@ export const ChronosConfigSchema = z.object({
   fallback: z.any().optional(),
   writeOptimization: z.any().optional(),
   transactions: z.any().optional(),
+  logicalDelete: LogicalDeleteConfigSchema.optional(),
+  versioning: VersioningConfigSchema.optional(),
 }).superRefine((cfg, ctx) => {
   // Validate that either spacesConns, localStorage, or individual connection spacesConn is provided
   const hasGlobalSpacesConns = cfg.spacesConns && cfg.spacesConns.length > 0;
