@@ -28,9 +28,9 @@ In your DigitalOcean dashboard:
 ### 3. **Configure chronos-db**
 
 ```typescript
-import { initUnifiedDataManager } from 'chronos-db';
+import { initChronos } from 'chronos-db';
 
-const udm = initUnifiedDataManager({
+const chronos = initChronos({
   mongoUris: ['mongodb://localhost:27017'],
   
   // DigitalOcean Spaces configuration
@@ -107,7 +107,7 @@ chronos-db can automatically create missing buckets:
 
 ```typescript
 // Check and create buckets
-const result = await udm.admin.ensureBucketsExist(
+const result = await chronos.admin.ensureBucketsExist(
   { dbName: 'myapp', collection: 'users' },
   { 
     confirm: true,
@@ -176,7 +176,7 @@ Error: Region mismatch: endpoint uses 'fra1' but config specifies 'nyc3'
 
 #### **Test S3 Connectivity**
 ```typescript
-const connectivity = await udm.admin.testS3Connectivity(
+const connectivity = await chronos.admin.testS3Connectivity(
   { dbName: 'myapp', collection: 'users' }
 );
 
@@ -189,7 +189,7 @@ if (connectivity.success) {
 
 #### **Validate Configuration**
 ```typescript
-const validation = await udm.admin.validateSpacesConfiguration(
+const validation = await chronos.admin.validateSpacesConfiguration(
   { dbName: 'myapp', collection: 'users' }
 );
 
@@ -201,7 +201,7 @@ if (!validation.valid) {
 
 #### **Check Bucket Status**
 ```typescript
-const bucketStatus = await udm.admin.ensureBucketsExist(
+const bucketStatus = await chronos.admin.ensureBucketsExist(
   { dbName: 'myapp', collection: 'users' },
   { dryRun: true, confirm: true }
 );
@@ -315,7 +315,7 @@ bucketStatus.bucketStatuses.forEach(status => {
 // Add to your health check endpoint
 const healthCheck = async () => {
   try {
-    const connectivity = await udm.admin.testS3Connectivity(
+    const connectivity = await chronos.admin.testS3Connectivity(
       { dbName: 'myapp', collection: 'users' }
     );
     

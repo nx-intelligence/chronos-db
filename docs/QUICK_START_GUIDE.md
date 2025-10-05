@@ -30,7 +30,7 @@ npm install chronos-db@latest
 ### 2. Basic Import
 
 ```typescript
-import { initUnifiedDataManager } from 'chronos-db';
+import { initChronos } from 'chronos-db';
 ```
 
 ---
@@ -40,9 +40,9 @@ import { initUnifiedDataManager } from 'chronos-db';
 ### Minimal Configuration (Recommended)
 
 ```typescript
-import { initUnifiedDataManager } from 'chronos-db';
+import { initChronos } from 'chronos-db';
 
-const chronos = initUnifiedDataManager({
+const chronos = initChronos({
   // Required: MongoDB connection
   mongoUris: ['mongodb://localhost:27017'],
   
@@ -80,7 +80,7 @@ const chronos = initUnifiedDataManager({
 ### Production Configuration with S3
 
 ```typescript
-const chronos = initUnifiedDataManager({
+const chronos = initChronos({
   // MongoDB cluster
   mongoUris: [
     'mongodb://mongo1:27017,mongo2:27017,mongo3:27017?replicaSet=rs0'
@@ -134,7 +134,7 @@ const chronos = initUnifiedDataManager({
 ### Enable Retention Policies (Optional)
 
 ```typescript
-const chronos = initUnifiedDataManager({
+const chronos = initChronos({
   // ... basic config ...
   
   // Optional: Enable retention policies
@@ -157,7 +157,7 @@ const chronos = initUnifiedDataManager({
 ### Enable Rollup with Auto-Schedule (Optional)
 
 ```typescript
-const chronos = initUnifiedDataManager({
+const chronos = initChronos({
   // ... basic config ...
   
   // Optional: Enable rollup with automatic period management
@@ -171,7 +171,7 @@ const chronos = initUnifiedDataManager({
 ### Custom Rollup Configuration (Optional)
 
 ```typescript
-const chronos = initUnifiedDataManager({
+const chronos = initChronos({
   // ... basic config ...
   
   rollup: {
@@ -264,7 +264,7 @@ Your existing configuration will continue to work without changes:
 
 ```typescript
 // ✅ This still works (backward compatible)
-const chronos = initUnifiedDataManager({
+const chronos = initChronos({
   mongoUris: ['mongodb://localhost:27017'],
   localStorage: { enabled: true, basePath: './data' },
   counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'counters' },

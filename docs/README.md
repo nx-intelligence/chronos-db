@@ -36,9 +36,9 @@ npm install chronos
 ### **Minimal Setup (MongoDB Only)**
 
 ```javascript
-import { initUnifiedDataManager } from 'chronos';
+import { initChronos } from 'chronos-db';
 
-const chronos = initUnifiedDataManager({
+const chronos = initChronos({
   // Just MongoDB!
   mongoUris: ['mongodb://localhost:27017'],
   

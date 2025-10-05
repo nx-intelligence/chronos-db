@@ -7,9 +7,9 @@ Common use cases and patterns.
 ## Example 1: Basic CRUD
 
 ```javascript
-import { initUnifiedDataManager } from 'chronos';
+import { initChronos } from 'chronos-db';
 
-const chronos = initUnifiedDataManager(config);
+const chronos = initChronos(config);
 const ops = chronos.with({ dbName: 'app', collection: 'users' });
 
 // Create

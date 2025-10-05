@@ -431,13 +431,112 @@ writeOptimization: {
 
 ---
 
+---
+
+## 🏢 Enhanced Multi-Tenant Configuration
+
+For complex multi-tenant architectures, use `EnhancedChronosConfig` with explicit database types and tiers:
+
+### **Database Types**
+- **`metadata`** - System configuration, user settings, application metadata
+- **`knowledge`** - Content, documents, knowledge base, static data
+- **`runtime`** - User data, transactions, dynamic application data
+
+### **Tiers**
+- **`generic`** - Shared across all tenants (system-wide data)
+- **`domain`** - Shared within a domain (multi-tenant within domain)
+- **`tenant`** - Isolated per tenant (single-tenant data)
+
+### **Configuration Example**
+
+```javascript
+const config = {
+  mongoUris: [
+    'mongodb://meta-generic:27017',
+    'mongodb://meta-tenant-a:27017',
+    'mongodb://runtime-generic:27017',
+    'mongodb://runtime-tenant-a:27017'
+  ],
+  spacesConns: [/* S3 config */],
+  counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'chronos_counters' },
+  routing: { hashAlgo: 'rendezvous' },
+  retention: {},
+  rollup: {},
+  
+  // Enhanced multi-tenant configuration
+  databaseTypes: {
+    metadata: {
+      generic: { 
+        key: 'meta-generic', 
+        mongoUri: 'mongodb://meta-generic:27017', 
+        dbName: 'meta_generic' 
+      },
+      tenants: [
+        { 
+          key: 'meta-tenant-a', 
+          extIdentifier: 'tenant-a', 
+          mongoUri: 'mongodb://meta-tenant-a:27017', 
+          dbName: 'meta_tenant_a' 
+        }
+      ]
+    },
+    runtime: {
+      generic: { 
+        key: 'runtime-generic', 
+        mongoUri: 'mongodb://runtime-generic:27017', 
+        dbName: 'runtime_generic' 
+      },
+      tenants: [
+        { 
+          key: 'runtime-tenant-a', 
+          extIdentifier: 'tenant-a', 
+          mongoUri: 'mongodb://runtime-tenant-a:27017', 
+          dbName: 'runtime_tenant_a' 
+        }
+      ]
+    }
+  }
+};
+```
+
+### **Usage Patterns**
+
+**Option A: Direct Key Usage (Simplest)**
+```javascript
+const ops = chronos.with({
+  key: 'runtime-tenant-a',  // Direct lookup
+  collection: 'users'
+});
+```
+
+**Option B: Tier + ExtIdentifier Usage**
+```javascript
+const ops = chronos.with({
+  databaseType: 'runtime',
+  tier: 'tenant',
+  extIdentifier: 'tenant-a',  // Maps to 'runtime-tenant-a'
+  collection: 'users'
+});
+```
+
+**Option C: Generic Tier**
+```javascript
+const ops = chronos.with({
+  databaseType: 'metadata',
+  tier: 'generic',
+  collection: 'config'
+});
+```
+
+---
+
 ## Validation
 
 Chronos validates configuration on init:
 
 ```javascript
 try {
-  const chronos = initUnifiedDataManager(config);
+  const chronos = initChronos(config);
 } catch (error) {
   console.error('Config validation failed:', error.message);
   // Clear error messages with secret redaction

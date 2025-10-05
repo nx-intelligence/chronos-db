@@ -15,9 +15,9 @@ npm install chronos
 The simplest way to get started - just MongoDB and a local folder:
 
 ```javascript
-import { initUnifiedDataManager } from 'chronos';
+import { initChronos } from 'chronos-db';
 
-const chronos = initUnifiedDataManager({
+const chronos = initChronos({
   // MongoDB connection
   mongoUris: ['mongodb://localhost:27017'],
   

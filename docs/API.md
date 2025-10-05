@@ -6,16 +6,16 @@ Complete API documentation for Chronos.
 
 ## Initialization
 
-### `initUnifiedDataManager(config)`
+### `initChronos(config)`
 
 Initialize Chronos with configuration.
 
-**Returns:** `Udm` instance
+**Returns:** `Chronos` instance
 
 ```javascript
-import { initUnifiedDataManager } from 'chronos';
+import { initChronos } from 'chronos-db';
 
-const chronos = initUnifiedDataManager(config);
+const chronos = initChronos(config);
 ```
 
 See [CONFIGURATION.md](./CONFIGURATION.md) for config options.
@@ -392,15 +392,16 @@ Chronos is fully typed:
 
 ```typescript
 import { 
-  initUnifiedDataManager,
-  type UdmConfig,
+  initChronos,
+  type ChronosConfig,
+  type EnhancedChronosConfig,
   type CreateResult,
   type ItemView,
   type SmartInsertOptions
-} from 'chronos';
+} from 'chronos-db';
 
-const config: UdmConfig = { /* ... */ };
-const chronos = initUnifiedDataManager(config);
+const config: ChronosConfig = { /* ... */ };
+const chronos = initChronos(config);
 ```
 
 ---
