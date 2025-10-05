@@ -186,11 +186,15 @@ function generateServerId(): string {
  */
 async function executeWithTransactionSupport<T>(
   mongoClient: any,
-  operation: (session: ClientSession) => Promise<T>
+  operation: (session: ClientSession) => Promise<T>,
+  router: BridgeRouter
 ): Promise<T> {
   const startTime = Date.now();
   const config = getGlobalConfig();
-  const mongoUri = config?.mongoUris?.[0];
+  
+  // Get MongoDB URIs from the router (which handles the new mongoConns format)
+  const mongoUris = router.getAllMongoUris();
+  const mongoUri = mongoUris[0];
   
   logger.debug('Starting transaction support check', {
     mongoUri: mongoUri?.replace(/\/\/.*@/, '//***@'),
@@ -493,7 +497,7 @@ export async function createItem(
 
             // Insert head document
             await repos.upsertHead(headDoc, session);
-          });
+          }, router);
         } catch (error) {
           // Compensation: delete written S3 keys
           await compensateS3(storage, spaces.buckets.json, spaces.buckets.content, writtenKeys);
@@ -782,7 +786,7 @@ export async function updateItem(
 
             // Update head with optimistic lock
             await repos.updateHeadWithLock(headDoc, head.ov, session);
-          });
+          }, router);
         } catch (error) {
           // Compensation: delete written S3 keys
           await compensateS3(storage, spaces.buckets.json, spaces.buckets.content, writtenKeys);
@@ -980,7 +984,7 @@ export async function deleteItem(
               // Delete head document
               await repos.deleteHead(new ObjectId(id), session);
             }
-          });
+          }, router);
         } catch (error) {
           throw new TxnError(
             `Operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,

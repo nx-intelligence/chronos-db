@@ -178,7 +178,7 @@ export class BridgeRouter {
   /**
    * Get all MongoDB URIs from database connections
    */
-  private getAllMongoUris(): string[] {
+  public getAllMongoUris(): string[] {
     const uris: string[] = [];
     
     // Collect all MongoDB URIs from all database types
