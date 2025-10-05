@@ -394,6 +394,66 @@ const udm = initUnifiedDataManager({
 
 ---
 
+### 10. **Admin API & DigitalOcean Spaces Integration**
+
+Comprehensive admin tools for production management:
+
+```typescript
+// Test S3 connectivity
+const connectivity = await udm.admin.testS3Connectivity({
+  dbName: 'myapp',
+  collection: 'users'
+});
+
+if (connectivity.success) {
+  console.log('Available buckets:', connectivity.buckets);
+} else {
+  console.log('Connectivity issue:', connectivity.error);
+}
+
+// Validate DigitalOcean Spaces configuration
+const validation = await udm.admin.validateSpacesConfiguration({
+  dbName: 'myapp',
+  collection: 'users'
+});
+
+if (!validation.valid) {
+  console.log('Issues:', validation.issues);
+  console.log('Recommendations:', validation.recommendations);
+}
+
+// Ensure required buckets exist (with auto-creation)
+const bucketResult = await udm.admin.ensureBucketsExist(
+  { dbName: 'myapp', collection: 'users' },
+  {
+    confirm: true,
+    createIfMissing: true,
+    dryRun: false
+  }
+);
+
+console.log(`Checked ${bucketResult.bucketsChecked} buckets`);
+console.log(`Created ${bucketResult.bucketsCreated} buckets`);
+
+// State management for TTL processing
+const stateResult = await udm.admin.markItemsAsProcessedByTTL(
+  { dbName: 'myapp', collection: 'users' },
+  24, // TTL in hours
+  { confirm: true, dryRun: false }
+);
+
+console.log(`Processed ${stateResult.itemsProcessed} items`);
+```
+
+**Admin Functions:**
+- `testS3Connectivity()` - Test S3 credentials and list buckets
+- `validateSpacesConfiguration()` - Validate DigitalOcean Spaces setup
+- `ensureBucketsExist()` - Check and create required buckets
+- `markItemsAsProcessedByTTL()` - Process items based on TTL expiration
+- `markItemAsProcessed()` - Mark specific item as processed
+
+---
+
 ## 🏗️ Architecture
 
 ### Data Flow
@@ -498,6 +558,8 @@ Tested with:
 - [Architecture Plan](./documenation/plan) - Master workplan
 - [Extensions](./documenation/extensions.md) - System fields & shadows
 - [Enrichment API](./documenation/extension2.md) - Deep merge semantics
+- [DigitalOcean Spaces Integration](./docs/DIGITALOCEAN_SPACES.md) - Complete setup guide
+- [DigitalOcean Troubleshooting](./TROUBLESHOOTING_DIGITALOCEAN.md) - Credential and permission issues
 
 ---
 
