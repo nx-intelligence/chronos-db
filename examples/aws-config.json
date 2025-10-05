@@ -1,33 +1,33 @@
 {
   "mongoUris": [
-    "mongodb+srv://user:pass@cluster-a.mongodb.net",
-    "mongodb+srv://user:pass@cluster-b.mongodb.net"
+    "mongodb+srv://username:password@cluster-a.mongodb.net/database?retryWrites=true&w=majority",
+    "mongodb+srv://username:password@cluster-b.mongodb.net/database?retryWrites=true&w=majority"
   ],
   "spacesConns": [
     {
       "endpoint": "https://s3.us-east-1.amazonaws.com",
       "region": "us-east-1",
-      "accessKey": "AKIA...",
-      "secretKey": "SECRET...",
-      "backupsBucket": "udm-backups-a",
-      "jsonBucket": "udm-json-a",
-      "contentBucket": "udm-content-a",
+      "accessKey": "YOUR_AWS_ACCESS_KEY",
+      "secretKey": "YOUR_AWS_SECRET_KEY",
+      "backupsBucket": "chronos-backups-us-east-1",
+      "jsonBucket": "chronos-json-us-east-1",
+      "contentBucket": "chronos-content-us-east-1",
       "forcePathStyle": false
     },
     {
       "endpoint": "https://s3.eu-west-1.amazonaws.com",
       "region": "eu-west-1",
-      "accessKey": "AKIA2...",
-      "secretKey": "SECRET2...",
-      "backupsBucket": "udm-backups-b",
-      "jsonBucket": "udm-json-b",
-      "contentBucket": "udm-content-b",
+      "accessKey": "YOUR_AWS_ACCESS_KEY_2",
+      "secretKey": "YOUR_AWS_SECRET_KEY_2",
+      "backupsBucket": "chronos-backups-eu-west-1",
+      "jsonBucket": "chronos-json-eu-west-1",
+      "contentBucket": "chronos-content-eu-west-1",
       "forcePathStyle": false
     }
   ],
   "counters": {
-    "mongoUri": "mongodb+srv://user:pass@cluster-metrics.mongodb.net",
-    "dbName": "udm_counters"
+    "mongoUri": "mongodb+srv://username:password@cluster-metrics.mongodb.net/counters?retryWrites=true&w=majority",
+    "dbName": "chronos_counters"
   },
   "routing": {
     "hashAlgo": "rendezvous",
@@ -44,12 +44,40 @@
   "collectionMaps": {
     "kycDocuments": {
       "indexedProps": ["clientId", "documentType", "issuedCountry"],
-      "base64Props": { "fileContent": { "contentType": "application/pdf" } },
-      "validation": { "requiredIndexed": ["clientId", "documentType"] }
+      "base64Props": { 
+        "fileContent": { 
+          "contentType": "application/pdf",
+          "preferredText": false
+        } 
+      },
+      "validation": { 
+        "requiredIndexed": ["clientId", "documentType"] 
+      }
     },
     "profiles": {
       "indexedProps": ["customerId", "preferences.language", "preferences.notifications"],
-      "base64Props": { "avatar": { "contentType": "image/png" } }
+      "base64Props": { 
+        "avatar": { 
+          "contentType": "image/png",
+          "preferredText": false
+        } 
+      }
     }
+  },
+  "devShadow": {
+    "enabled": true,
+    "ttlHours": 24,
+    "maxBytesPerDoc": 1048576
+  },
+  "fallback": {
+    "enabled": true,
+    "maxRetries": 3,
+    "retryDelayMs": 1000,
+    "maxDelayMs": 60000,
+    "deadLetterCollection": "chronos_fallback_dead"
+  },
+  "transactions": {
+    "enabled": true,
+    "autoDetect": true
   }
 }

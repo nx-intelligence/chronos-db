@@ -35,6 +35,10 @@ yarn-error.log*
 
 # Test artifacts
 .jest-cache/
+tests/
+test-*.js
+test-*.data/
+test-*.json
 
 # Client-specific documentation (should not be committed)
 docs/client-specific/

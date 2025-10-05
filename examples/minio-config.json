@@ -1,20 +1,22 @@
 {
-  "mongoUris": ["mongodb://localhost:27017/udm"],
+  "mongoUris": [
+    "mongodb://localhost:27017/chronos"
+  ],
   "spacesConns": [
     {
       "endpoint": "http://localhost:9000",
       "region": "us-east-1",
       "accessKey": "minioadmin",
       "secretKey": "minioadmin",
-      "backupsBucket": "udm-backups",
-      "jsonBucket": "udm-json",
-      "contentBucket": "udm-content",
+      "backupsBucket": "chronos-backups",
+      "jsonBucket": "chronos-json",
+      "contentBucket": "chronos-content",
       "forcePathStyle": true
     }
   ],
   "counters": {
-    "mongoUri": "mongodb://localhost:27017/udm_counters",
-    "dbName": "udm_counters"
+    "mongoUri": "mongodb://localhost:27017/chronos_counters",
+    "dbName": "chronos_counters"
   },
   "routing": {
     "hashAlgo": "rendezvous",
@@ -31,8 +33,27 @@
   "collectionMaps": {
     "testDocuments": {
       "indexedProps": ["testId", "category"],
-      "base64Props": { "data": { "contentType": "application/octet-stream" } },
-      "validation": { "requiredIndexed": ["testId"] }
+      "base64Props": { 
+        "data": { 
+          "contentType": "application/octet-stream",
+          "preferredText": false
+        } 
+      },
+      "validation": { 
+        "requiredIndexed": ["testId"] 
+      }
     }
+  },
+  "devShadow": {
+    "enabled": true,
+    "ttlHours": 12,
+    "maxBytesPerDoc": 524288
+  },
+  "fallback": {
+    "enabled": false
+  },
+  "transactions": {
+    "enabled": false,
+    "autoDetect": false
   }
 }
