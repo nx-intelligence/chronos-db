@@ -191,7 +191,7 @@ export async function enrichRecord(
       try {
         const externalizeResult = await externalizeBase64({
           storage,
-          contentBucket: spaces.contentBucket,
+          contentBucket: spaces.buckets.content,
           collection: ctx.collection,
           idHex: id,
           ov,
@@ -221,7 +221,7 @@ export async function enrichRecord(
     let sha256: string;
 
     try {
-      const result = await storage.putJSON(spaces.jsonBucket, jKey, transformed);
+        const result = await storage.putJSON(spaces.buckets.json, jKey, transformed);
       size = result.size ?? 0;
       sha256 = result.sha256 || '';
       writtenKeys.push(jKey);
@@ -259,7 +259,7 @@ export async function enrichRecord(
           at: now,
           ...(actor && { actor }),
           ...(reason && { reason }),
-          jsonBucket: spaces.jsonBucket,
+          jsonBucket: spaces.buckets.json,
           jsonKey: jKey,
           metaIndexed,
           size: size ?? 0,
@@ -273,7 +273,7 @@ export async function enrichRecord(
           itemId: new ObjectId(id),
           ov,
           cv,
-          jsonBucket: spaces.jsonBucket,
+          jsonBucket: spaces.buckets.json,
           jsonKey: jKey,
           metaIndexed,
           size: size ?? 0,
@@ -306,7 +306,7 @@ export async function enrichRecord(
       });
     } catch (error) {
       // Compensation: delete written S3 keys
-      await compensateS3(storage, spaces.jsonBucket, spaces.contentBucket, writtenKeys);
+      await compensateS3(storage, spaces.buckets.json, spaces.buckets.content, writtenKeys);
       
       throw new TxnError(
         `Transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`,

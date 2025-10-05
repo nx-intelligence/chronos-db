@@ -180,7 +180,7 @@ export async function hardDeleteItem(
   // Delete S3 objects (best effort)
   for (const key of s3KeysToDelete) {
     try {
-      await storage.del(spaces.jsonBucket, key);
+      await storage.del(spaces.buckets.json, key);
       s3ObjectsDeleted++;
       deletedS3Keys.push(key);
     } catch (error) {
@@ -341,7 +341,7 @@ export async function cleanupOrphanedS3Objects(
 
   // List all objects in the JSON bucket
   do {
-    const result = await storage.list(spaces.jsonBucket, `${ctx.collection}/`, { 
+    const result = await storage.list(spaces.buckets.json, `${ctx.collection}/`, { 
       maxKeys: batchSize,
       ...(continuationToken && { continuationToken })
     });
@@ -354,7 +354,7 @@ export async function cleanupOrphanedS3Objects(
         
         if (!opts.dryRun) {
           try {
-            await storage.del(spaces.jsonBucket, key);
+            await storage.del(spaces.buckets.json, key);
             deletedKeys.push(key);
           } catch (error) {
             console.error(`Failed to delete orphaned storage object ${key}:`, error);

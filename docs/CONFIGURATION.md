@@ -8,14 +8,16 @@ Complete reference for all configuration options.
 
 ```javascript
 {
+  mongoConns: [{
+    key: 'mongo-local',
+    mongoUri: 'mongodb://localhost:27017'
+  }],
   databases: {
-    runtime: {
-      generic: {
-        key: 'runtime-generic',
-        mongoUri: 'mongodb://localhost:27017',
-        dbName: 'runtime_generic'
-      }
-    }
+    runtime: [{
+      key: 'runtime-local',
+      mongoConnKey: 'mongo-local',
+      dbName: 'runtime_local'
+    }]
   },
   localStorage: { enabled: true, basePath: './data' },
   counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'chronos_counters' },
@@ -37,413 +39,466 @@ Complete reference for all configuration options.
 
 ```javascript
 {
+  // MongoDB connections - define once, reference by key
+  mongoConns: [
+    { key: 'mongo-cluster-a', mongoUri: 'mongodb+srv://user:pass@cluster-a.mongodb.net' },
+    { key: 'mongo-cluster-b', mongoUri: 'mongodb+srv://user:pass@cluster-b.mongodb.net' }
+  ],
+  
   // Database configuration - can have empty sections
   databases: {
-    metadata: {
-      generic: {
-        key: 'meta-generic',
-        mongoUri: 'mongodb://primary:27017',
-        dbName: 'metadata_generic'
-      },
-      tenants: [
-        {
-          key: 'meta-tenant-a',
-          extIdentifier: 'tenant-a',
-          mongoUri: 'mongodb://secondary:27017',
-          dbName: 'metadata_tenant_a'
-        }
-      ]
-    },
-    runtime: {
-      generic: {
-        key: 'runtime-generic',
-        mongoUri: 'mongodb://primary:27017',
-        dbName: 'runtime_generic'
-      },
-      tenants: [
-        {
-          key: 'runtime-tenant-a',
-          extIdentifier: 'tenant-a',
-          mongoUri: 'mongodb://secondary:27017',
-          dbName: 'runtime_tenant_a'
-        }
-      ]
+    metadata: [
+      { key: 'meta-domain1', mongoConnKey: 'mongo-cluster-a', spacesConnKey: 'aws-us-east', tenantId: 'domain1', dbName: 'metadata_domain1' },
+      { key: 'meta-tenant-a', mongoConnKey: 'mongo-cluster-b', spacesConnKey: 'aws-us-east', tenantId: 'tenant-a', dbName: 'metadata_tenant_a' }
+    ],
+    knowledge: [
+      { key: 'know-domain1', mongoConnKey: 'mongo-cluster-a', spacesConnKey: 'aws-us-east', tenantId: 'domain1', dbName: 'knowledge_domain1' },
+      { key: 'know-tenant-a', mongoConnKey: 'mongo-cluster-b', spacesConnKey: 'aws-us-east', tenantId: 'tenant-a', dbName: 'knowledge_tenant_a' }
+    ],
+    runtime: [
+      { key: 'runtime-domain1', mongoConnKey: 'mongo-cluster-a', spacesConnKey: 'aws-us-east', tenantId: 'domain1', dbName: 'runtime_domain1' },
+      { key: 'runtime-tenant-a', mongoConnKey: 'mongo-cluster-b', spacesConnKey: 'aws-us-east', tenantId: 'tenant-a', dbName: 'runtime_tenant_a' }
+    ],
+    logs: {
+      connection: { key: 'logs-main', mongoConnKey: 'mongo-cluster-a', spacesConnKey: 'aws-us-east', dbName: 'chronos_logs' }
     }
   },
   
-  // Storage: EITHER spacesConns OR localStorage
-  
-  // Option A: S3-compatible storage (production)
+  // S3-compatible storage connections
   spacesConns: [{
-    endpoint: 'https://nyc3.digitaloceanspaces.com',
-    region: 'nyc3',
-    accessKey: 'YOUR_ACCESS_KEY',
-    secretKey: 'YOUR_SECRET_KEY',
-    jsonBucket: 'chronos-json',
-    contentBucket: 'chronos-content',
-    backupsBucket: 'chronos-backups',
-    forcePathStyle: false  // Set true for MinIO
+    key: 'aws-us-east',
+    endpoint: 'https://s3.us-east-1.amazonaws.com',
+    region: 'us-east-1',
+    accessKey: 'YOUR_AWS_ACCESS_KEY',
+    secretKey: 'YOUR_AWS_SECRET_KEY',
+    buckets: {
+      json: 'chronos-json-us-east',
+      content: 'chronos-content-us-east',
+      versions: 'chronos-versions-us-east',
+      backup: 'chronos-backups-us-east'
+    }
   }],
   
-  // Option B: Local filesystem (development)
-  localStorage: {
-    enabled: true,
-    basePath: './chronos-data'
-  },
+  // Local storage (for development/testing)
+  localStorage: { enabled: false, basePath: './data' },
   
   // Counters database
-  counters: {
-    mongoUri: 'mongodb://localhost:27017',
-    dbName: 'chronos_counters'
+  counters: { mongoUri: 'mongodb+srv://user:pass@cluster-metrics.mongodb.net', dbName: 'chronos_counters' },
+  
+  // Routing configuration
+  routing: { 
+    hashAlgo: 'rendezvous',
+    chooseKey: 'tenantId|dbName'
   },
   
-  // Routing
-  routing: {
-    hashAlgo: 'rendezvous',  // or 'jump'
-    chooseKey: 'tenantId|dbName|collection:objectId'  // optional
-  },
-  
-  // Retention policies
+  // Data retention policies
   retention: {
-    ver: {
-      days: 90,         // Keep version metadata for 90 days
-      maxPerItem: 1000  // Keep last 1000 versions per item
-    },
-    counters: {
-      days: 30,
-      weeks: 12,
-      months: 6
-    }
+    ver: { days: 90, maxPerItem: 1000 },
+    counters: { days: 30, weeks: 12, months: 6 }
   },
   
-  // Rollup (for manifests)
-  rollup: {
-    enabled: false,
-    manifestPeriod: 'daily'  // 'daily' | 'weekly' | 'monthly'
+  // Data rollup configuration
+  rollup: { 
+    enabled: true, 
+    manifestPeriod: 'daily' 
   },
   
-  // Collection definitions
+  // Collection mapping and validation
   collectionMaps: {
-    users: {
-      // Fields to index in MongoDB
-      indexedProps: ['email', 'status', 'createdAt'],
-      
-      // Base64 fields to externalize to storage
-      base64Props: {
-        avatar: {
-          contentType: 'image/jpeg'
+    users: { 
+      indexedProps: ['email', 'status'],
+      validation: { requiredIndexed: ['email'] }
+    },
+    documents: {
+      indexedProps: ['clientId', 'docType'],
+      base64Props: { 
+        content: { 
+          contentType: 'application/pdf',
+          preferredText: false
         }
-      },
-      
-      // Validation
-      validation: {
-        requiredIndexed: ['email']
-      },
-      
-      // Per-collection version retention (overrides global)
-      versionRetention: {
-        daysInIndex: 30,        // Keep 30 days in MongoDB
-        maxVersionsInIndex: 100  // Keep last 100 versions
       }
     }
   },
   
-  // Counter rules (optional)
-  counterRules: {
-    rules: [{
-      name: 'activeUsers',
-      when: { status: 'active' },
-      on: ['CREATE', 'UPDATE'],
-      scope: 'meta'
-    }]
-  },
-  
-  // Dev shadows (optional)
+  // Development shadow storage
   devShadow: {
     enabled: true,
     ttlHours: 24,
-    maxBytesPerDoc: 1048576  // 1MB
+    maxBytesPerDoc: 1048576
   },
   
-  // Hard delete (optional)
-  hardDeleteEnabled: true,
-  
-  // Fallback queues (optional)
+  // Fallback queue configuration
   fallback: {
     enabled: true,
-    maxAttempts: 10,
-    baseDelayMs: 2000,
+    maxRetries: 3,
+    retryDelayMs: 1000,
     maxDelayMs: 60000,
-    deadLetterCollection: 'chronos_dead_letter'
+    deadLetterCollection: 'chronos_fallback_dead'
   },
   
-  // Write optimization (optional)
-  writeOptimization: {
-    batchS3: true,
-    batchWindowMs: 100,
-    debounceCountersMs: 1000,
-    allowShadowSkip: true
+  // Transaction configuration
+  transactions: {
+    enabled: true,
+    autoDetect: true
   }
 }
 ```
 
 ---
 
-## Configuration Options Reference
+## Configuration Reference
 
-### `databases`
+### Core Configuration
 
-**Type:** `{ metadata?: DatabaseTypeConfig, knowledge?: DatabaseTypeConfig, runtime?: DatabaseTypeConfig }`  
-**Required:** Yes (at least one database type)  
-**Description:** Database configuration organized by type and tier
+#### `mongoConns` (Required)
+Array of MongoDB connection configurations.
 
-Database configuration object that defines all database connections. You can omit any database type (`metadata`, `knowledge`, `runtime`) if you don't need it.
+```typescript
+interface MongoConnConfig {
+  key: string;           // Unique key for referencing this connection
+  mongoUri: string;       // MongoDB connection URI
+}
+```
 
+**Example:**
 ```javascript
-databases: {
-  metadata: {
-    generic: {
-      key: 'meta-generic',
-      mongoUri: 'mongodb://localhost:27017',
-      dbName: 'metadata_generic'
-    },
-    tenants: [
-      {
-        key: 'meta-tenant-a',
-        extIdentifier: 'tenant-a',
-        mongoUri: 'mongodb://localhost:27017',
-        dbName: 'metadata_tenant_a'
-      }
-    ]
-  },
-  runtime: {
-    generic: {
-      key: 'runtime-generic',
-      mongoUri: 'mongodb://localhost:27017',
-      dbName: 'runtime_generic'
-    }
-  }
+mongoConns: [
+  { key: 'mongo-cluster-a', mongoUri: 'mongodb+srv://user:pass@cluster-a.mongodb.net' },
+  { key: 'mongo-cluster-b', mongoUri: 'mongodb+srv://user:pass@cluster-b.mongodb.net' }
+]
+```
+
+#### `databases` (Required)
+Database configuration with optional sections for different database types.
+
+```typescript
+interface ChronosConfig {
+  databases: {
+    metadata?: DatabaseConnection[];    // System configuration, user settings
+    knowledge?: DatabaseConnection[];    // Content, documents, knowledge base
+    runtime?: DatabaseConnection[];      // User data, transactions, dynamic data
+    logs?: LogsDatabaseConfig;          // System logs and audit trails
+  };
 }
 ```
 
 **Database Types:**
 - **`metadata`** - System configuration, user settings, application metadata
-- **`knowledge`** - Content, documents, knowledge base, static data  
+- **`knowledge`** - Content, documents, knowledge base, static data
 - **`runtime`** - User data, transactions, dynamic application data
+- **`logs`** - System logs and audit trails (no tiers, simple structure)
 
-**Tiers:**
-- **`generic`** - Shared across all tenants (system-wide data)
-- **`domains`** - Shared within a domain (multi-tenant within domain)
-- **`tenants`** - Isolated per tenant (single-tenant data)
+#### `DatabaseConnection`
+Individual database connection configuration.
 
-**Connection Properties:**
-- **`key`** - Globally unique identifier for direct routing (e.g., `"runtime-tenant-a"`)
-- **`mongoUri`** - MongoDB connection URI
-- **`dbName`** - Database name
-- **`extIdentifier`** - Optional external identifier for mapping (e.g., `"tenant-a"`)
+```typescript
+interface DatabaseConnection {
+  key: string;            // Globally unique identifier for direct routing
+  mongoConnKey: string;   // References a connection in mongoConns array
+  dbName: string;         // Database name
+  tenantId?: string;      // Optional tenant ID for mapping
+  spacesConnKey?: string; // References a connection in spacesConns array
+}
+```
 
----
+#### `LogsDatabaseConfig`
+Special configuration for logs database (no tiers).
 
-### `spacesConns`
+```typescript
+interface LogsDatabaseConfig {
+  connection: DatabaseConnection; // Single connection for logs
+}
+```
 
-**Type:** `SpacesConnConfig[]`  
-**Required:** If not using `localStorage`  
-**Range:** 1-10 connections
+### Storage Configuration
 
-S3-compatible storage connections.
+#### `spacesConns` (Optional)
+Array of S3-compatible storage connections.
 
+```typescript
+interface SpacesConnConfig {
+  key: string;            // Unique key for referencing this S3 connection
+  endpoint: string;        // S3 endpoint URL
+  region: string;          // AWS region
+  accessKey: string;       // Access key
+  secretKey: string;       // Secret key
+  buckets: {
+    json: string;         // Bucket for JSON data (chronos-jsons)
+    content: string;      // Bucket for content files
+    versions: string;     // Bucket for versions/manifests
+    backup?: string;      // Bucket for backups (optional - can reuse json bucket)
+  };
+  forcePathStyle?: boolean; // Force path style (for MinIO)
+}
+```
+
+**Example:**
 ```javascript
 spacesConns: [{
-  endpoint: string,      // S3 endpoint URL
-  region: string,        // AWS region
-  accessKey: string,     // Access key
-  secretKey: string,     // Secret key
-  jsonBucket: string,    // Bucket for JSON payloads
-  contentBucket: string, // Bucket for externalized blobs
-  backupsBucket: string, // Bucket for manifests
-  forcePathStyle: boolean // true for MinIO, false for AWS
+  key: 'aws-us-east',
+  endpoint: 'https://s3.us-east-1.amazonaws.com',
+  region: 'us-east-1',
+  accessKey: 'YOUR_AWS_ACCESS_KEY',
+  secretKey: 'YOUR_AWS_SECRET_KEY',
+  buckets: {
+    json: 'chronos-json-us-east',
+    content: 'chronos-content-us-east',
+    versions: 'chronos-versions-us-east',
+    backup: 'chronos-backups-us-east'
+  }
 }]
 ```
 
-**Supported providers:**
-- AWS S3
-- DigitalOcean Spaces
-- MinIO
-- Cloudflare R2
-- Any S3-compatible API
+#### `localStorage` (Optional)
+Local filesystem storage for development/testing.
 
----
-
-### `localStorage`
-
-**Type:** `LocalStorageConfig`  
-**Required:** If not using `spacesConns`
-
-Local filesystem storage (development/testing only).
-
-```javascript
-localStorage: {
-  enabled: true,
-  basePath: './chronos-data'  // Where to store files
+```typescript
+interface LocalStorageConfig {
+  basePath: string;       // Base path for local storage
+  enabled: boolean;       // Whether to enable this mode
 }
 ```
 
-**⚠️ NOT recommended for production!** Use S3 instead.
+### Other Configuration
 
----
+#### `counters` (Required)
+Counters database configuration.
 
-### `counters`
+```typescript
+interface CountersConfig {
+  mongoUri: string;       // MongoDB URI for counters
+  dbName: string;         // Database name for counters
+}
+```
 
-**Type:** `CountersConfig`  
-**Required:** Yes
+#### `routing` (Optional)
+Routing configuration.
 
-Separate MongoDB for analytics counters.
+```typescript
+interface RoutingConfig {
+  hashAlgo?: 'rendezvous' | 'jump';  // Hashing algorithm
+  chooseKey?: string | ((ctx: RouteContext) => string); // Key selection strategy
+}
+```
 
-```javascript
-counters: {
-  mongoUri: 'mongodb://localhost:27017',  // Can be same as main
-  dbName: 'chronos_counters'
+#### `retention` (Optional)
+Data retention policies.
+
+```typescript
+interface RetentionConfig {
+  ver?: {
+    days?: number;        // Days to keep versions
+    maxPerItem?: number;  // Maximum versions per item
+  };
+  counters?: {
+    days?: number;        // Days to keep daily counters
+    weeks?: number;       // Weeks to keep weekly counters
+    months?: number;      // Months to keep monthly counters
+  };
+}
+```
+
+#### `rollup` (Optional)
+Data rollup configuration.
+
+```typescript
+interface RollupConfig {
+  enabled: boolean;       // Whether rollup is enabled
+  manifestPeriod: 'daily' | 'weekly' | 'monthly'; // Rollup frequency
+}
+```
+
+#### `collectionMaps` (Optional)
+Collection mapping and validation rules.
+
+```typescript
+interface CollectionMaps {
+  [collectionName: string]: {
+    indexedProps: string[]; // Properties to index (empty = auto-index all)
+    base64Props?: Record<string, {
+      contentType: string;
+      preferredText?: boolean;
+      textCharset?: string;
+    }>;
+    validation?: {
+      requiredIndexed?: string[];
+    };
+  };
+}
+```
+
+#### `devShadow` (Optional)
+Development shadow storage configuration.
+
+```typescript
+interface DevShadowConfig {
+  enabled: boolean;       // Whether dev shadow is enabled
+  ttlHours: number;      // TTL in hours
+  maxBytesPerDoc?: number; // Maximum bytes per document
+}
+```
+
+#### `fallback` (Optional)
+Fallback queue configuration.
+
+```typescript
+interface FallbackConfig {
+  enabled: boolean;       // Whether fallback is enabled
+  maxAttempts: number;    // Maximum retry attempts
+  baseDelayMs: number;    // Base delay between retries
+  maxDelayMs: number;     // Maximum delay
+  deadLetterCollection: string; // Dead letter collection name
+}
+```
+
+#### `transactions` (Optional)
+Transaction configuration.
+
+```typescript
+interface TransactionConfig {
+  enabled: boolean;       // Whether transactions are enabled
+  autoDetect?: boolean;   // Whether to auto-detect transaction support
+}
+```
+
+#### `writeOptimization` (Optional)
+Write optimization configuration.
+
+```typescript
+interface WriteOptimizationConfig {
+  batchS3: boolean;       // Whether to batch S3 writes
+  batchWindowMs: number;  // Batch window in milliseconds
+  debounceCountersMs: number; // Debounce counters in milliseconds
+  allowShadowSkip: boolean; // Whether to allow shadow skip
+}
+```
+
+#### `counterRules` (Optional)
+Counter rules configuration for conditional totals.
+
+```typescript
+interface CountersRulesConfig {
+  rules?: Array<{
+    name: string;         // Rule name
+    on?: ('CREATE' | 'UPDATE' | 'DELETE')[]; // Events to trigger on
+    scope?: 'meta' | 'payload'; // Scope
+    when: Record<string, any>; // Condition
+  }>;
+}
+```
+
+#### `hardDeleteEnabled` (Optional)
+Enable hard delete functionality.
+
+```typescript
+hardDeleteEnabled?: boolean; // Whether hard delete is enabled
+```
+
+### Route Context
+
+The `RouteContext` interface defines the context for routing decisions:
+
+```typescript
+interface RouteContext {
+  dbName: string;         // Database name
+  collection: string;     // Collection name
+  objectId?: string;      // Object ID
+  forcedIndex?: number;   // Forced index for admin override
+  key?: string;           // Key for direct routing
+  databaseType?: 'metadata' | 'knowledge' | 'runtime' | 'logs'; // Database type
+  tier?: 'domain' | 'tenant'; // Tier
+  tenantId?: string;      // Tenant ID
 }
 ```
 
 ---
 
-### `routing`
+## Multi-Tenant Architecture
 
-**Type:** `RoutingConfig`
+### Key-Based Connection Mapping
 
-Configure multi-backend routing.
+The new configuration uses a **key-based mapping system** that provides several benefits:
 
-```javascript
-routing: {
-  hashAlgo: 'rendezvous',  // 'rendezvous' (default) or 'jump'
-  chooseKey: 'tenantId|dbName|collection:objectId'  // Custom routing key
-}
+- **Reusability**: One MongoDB connection can serve multiple databases
+- **Flexibility**: One S3 connection can serve multiple database types
+- **Clarity**: Explicit relationships between components
+- **Maintainability**: Easy to update connection details in one place
+
+### Usage Patterns
+
+#### Option A: Direct Key Usage (Simplest)
+```typescript
+const ops = chronos.with({
+  key: 'runtime-tenant-a',  // Direct lookup, no resolution needed
+  collection: 'users'
+});
 ```
 
----
-
-### `retention.ver`
-
-**Type:** `{ days?, maxPerItem? }`
-
-Global version retention policy for MongoDB `_ver` index.
-
-```javascript
-retention: {
-  ver: {
-    days: 90,          // Keep version metadata for 90 days
-    maxPerItem: 1000   // Keep last 1000 versions per item
-  }
-}
+#### Option B: Tenant-Based Routing
+```typescript
+const ops = chronos.with({
+  databaseType: 'runtime',
+  tenantId: 'tenant-a',     // Maps to tenant-specific database
+  collection: 'users'
+});
 ```
 
-**Note:** This controls the **MongoDB index**, not storage! Storage keeps all versions forever (until hard delete).
-
----
-
-### `collectionMaps`
-
-**Type:** `Record<string, CollectionMap>`  
-**Required:** Yes
-
-Define collections and their behavior.
-
-```javascript
-collectionMaps: {
-  users: {
-    indexedProps: ['email', 'status'],     // Searchable in MongoDB
-    
-    base64Props: {                          // Externalize to storage
-      avatar: { contentType: 'image/jpeg' },
-      document: { contentType: 'application/pdf' }
-    },
-    
-    validation: {
-      requiredIndexed: ['email']            // Must be present
-    },
-    
-    versionRetention: {                     // Override global retention
-      daysInIndex: 30,
-      maxVersionsInIndex: 100
-    }
-  }
-}
+#### Option C: Logs Database (No Tiers)
+```typescript
+const ops = chronos.with({
+  key: 'logs-main',         // Direct key for logs database
+  collection: 'audit'
+});
 ```
 
----
+### Migration from Previous Versions
 
-### `counterRules`
+If you're upgrading from a previous version of chronos-db:
 
-**Type:** `CountersRulesConfig`  
-**Optional**
+1. **Remove `mongoUris` array**: Replace with `mongoConns` array
+2. **Add `key` fields**: Each connection needs a unique key
+3. **Update database structure**: Use direct arrays instead of nested objects
+4. **Add `spacesConnKey`**: Link databases to S3 connections
+5. **Update bucket structure**: Use `buckets` object instead of individual fields
 
-Define conditional counters.
+### Example Migration
 
-```javascript
-counterRules: {
-  rules: [{
-    name: 'activeUsers',
-    when: { status: 'active' },        // Condition
-    on: ['CREATE', 'UPDATE'],          // Which operations
-    scope: 'meta'                       // 'meta' or 'payload'
+**Before (v1.4.x):**
+```json
+{
+  "mongoUris": ["mongodb://localhost:27017"],
+  "spacesConns": [{
+    "endpoint": "http://localhost:9000",
+    "jsonBucket": "chronos-json",
+    "contentBucket": "chronos-content"
   }]
 }
 ```
 
----
-
-### `devShadow`
-
-**Type:** `DevShadowConfig`  
-**Optional**
-
-Store full snapshots in MongoDB for faster development.
-
-```javascript
-devShadow: {
-  enabled: true,
-  ttlHours: 24,              // Expire after 24 hours
-  maxBytesPerDoc: 1048576    // Max 1MB per shadow
-}
-```
-
-**⚠️ Development only!** Increases MongoDB storage.
-
----
-
-### `fallback`
-
-**Type:** `FallbackConfig`  
-**Optional**
-
-Enable fallback queues for automatic retry.
-
-```javascript
-fallback: {
-  enabled: true,
-  maxAttempts: 10,
-  baseDelayMs: 2000,
-  maxDelayMs: 60000,
-  deadLetterCollection: 'chronos_dead_letter'
-}
-```
-
----
-
-### `writeOptimization`
-
-**Type:** `WriteOptimizationConfig`  
-**Optional**
-
-Optimize writes for high throughput.
-
-```javascript
-writeOptimization: {
-  batchS3: true,              // Batch storage uploads
-  batchWindowMs: 100,         // 100ms window
-  debounceCountersMs: 1000,   // Update counters every 1s
-  allowShadowSkip: true       // Skip shadows for heavy ops
+**After (v1.5.x):**
+```json
+{
+  "mongoConns": [{
+    "key": "mongo-local",
+    "mongoUri": "mongodb://localhost:27017"
+  }],
+  "databases": {
+    "runtime": [{
+      "key": "runtime-local",
+      "mongoConnKey": "mongo-local",
+      "spacesConnKey": "minio-local",
+      "dbName": "runtime_local"
+    }]
+  },
+  "spacesConns": [{
+    "key": "minio-local",
+    "endpoint": "http://localhost:9000",
+    "buckets": {
+      "json": "chronos-json",
+      "content": "chronos-content",
+      "versions": "chronos-versions"
+    }
+  }]
 }
 ```
 
@@ -451,57 +506,44 @@ writeOptimization: {
 
 ## Environment-Specific Configs
 
-### **Development**
-
+### Development
 ```javascript
 {
+  mongoConns: [{ key: 'mongo-dev', mongoUri: 'mongodb://localhost:27017' }],
   databases: {
-    runtime: {
-      generic: {
-        key: 'runtime-generic',
-        mongoUri: 'mongodb://localhost:27017',
-        dbName: 'runtime_generic'
-      }
-    }
+    runtime: [{ key: 'runtime-dev', mongoConnKey: 'mongo-dev', dbName: 'dev_runtime' }]
   },
-  localStorage: { enabled: true, basePath: './data' },
-  counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'counters' },
-  devShadow: { enabled: true, ttlHours: 24 },
-  // ... minimal settings
+  localStorage: { enabled: true, basePath: './dev-data' },
+  devShadow: { enabled: true, ttlHours: 12 }
 }
 ```
 
-### **Production**
-
+### Production
 ```javascript
 {
+  mongoConns: [
+    { key: 'mongo-primary', mongoUri: 'mongodb+srv://user:pass@cluster.mongodb.net' }
+  ],
   databases: {
-    runtime: {
-      generic: {
-        key: 'runtime-generic',
-        mongoUri: 'mongodb://mongo1:27017,mongo2:27017,mongo3:27017?replicaSet=rs0',
-        dbName: 'runtime_generic'
-      }
-    }
+    metadata: [{ key: 'meta-prod', mongoConnKey: 'mongo-primary', spacesConnKey: 'aws-prod', dbName: 'metadata_prod' }],
+    runtime: [{ key: 'runtime-prod', mongoConnKey: 'mongo-primary', spacesConnKey: 'aws-prod', dbName: 'runtime_prod' }],
+    logs: { connection: { key: 'logs-prod', mongoConnKey: 'mongo-primary', spacesConnKey: 'aws-prod', dbName: 'logs_prod' } }
   },
   spacesConns: [{
-    endpoint: 'https://s3.amazonaws.com',
+    key: 'aws-prod',
+    endpoint: 'https://s3.us-east-1.amazonaws.com',
     region: 'us-east-1',
-    accessKey: 'YOUR_ACCESS_KEY',
-    secretKey: 'YOUR_SECRET_KEY',
-    jsonBucket: 'prod-chronos-json',
-    contentBucket: 'prod-chronos-content',
-    backupsBucket: 'prod-chronos-backups'
+    accessKey: process.env.AWS_ACCESS_KEY,
+    secretKey: process.env.AWS_SECRET_KEY,
+    buckets: {
+      json: 'chronos-json-prod',
+      content: 'chronos-content-prod',
+      versions: 'chronos-versions-prod',
+      backup: 'chronos-backups-prod'
+    }
   }],
-  counters: { 
-    mongoUri: 'mongodb://counters-db:27017',
-    dbName: 'chronos_counters'
-  },
-  retention: {
-    ver: { days: 365, maxPerItem: 5000 }
-  },
-  fallback: { enabled: true, maxAttempts: 10 },
-  writeOptimization: { batchS3: true, debounceCountersMs: 1000 }
+  fallback: { enabled: true },
+  transactions: { enabled: true }
 }
 ```
 
@@ -509,119 +551,29 @@ writeOptimization: {
 
 ## Best Practices
 
-1. **MongoDB Replica Set:** Always use 3-node replica set in production
-2. **Separate Counters:** Use dedicated MongoDB for counters
-3. **Version Retention:** Set based on compliance needs
-4. **Indexed Props:** Only index fields you query on
-5. **Storage:** Use S3 in production, local in development
+1. **Use Descriptive Keys**: Make keys meaningful (e.g., `mongo-cluster-prod`, `aws-us-east-1`)
+2. **Separate Environments**: Use different configurations for dev/staging/prod
+3. **Bucket Naming**: Include environment/region in bucket names
+4. **Security**: Never commit real credentials to version control
+5. **Testing**: Use MinIO for local development and testing
+6. **Monitoring**: Enable logs database for system monitoring
+7. **Backups**: Configure rollup and retention policies appropriately
+8. **Connection Reuse**: Use the same MongoDB/S3 connections for multiple databases when possible
 
 ---
 
----
+## Troubleshooting
 
-## 🏢 Multi-Tenant Configuration
+### Common Issues
 
-For complex multi-tenant architectures, use the `databases` configuration with explicit database types and tiers:
+1. **"S3 connection not found"**: Check that `spacesConnKey` matches a `key` in `spacesConns`
+2. **"MongoDB connection not found"**: Check that `mongoConnKey` matches a `key` in `mongoConns`
+3. **"Bucket does not exist"**: Ensure buckets are created in your S3-compatible storage
+4. **"Access denied"**: Verify S3 credentials and permissions
+5. **"Invalid endpoint"**: Check endpoint URL format for your S3 provider
 
-### **Database Types**
-- **`metadata`** - System configuration, user settings, application metadata
-- **`knowledge`** - Content, documents, knowledge base, static data
-- **`runtime`** - User data, transactions, dynamic application data
+### Getting Help
 
-### **Tiers**
-- **`generic`** - Shared across all tenants (system-wide data)
-- **`domains`** - Shared within a domain (multi-tenant within domain)
-- **`tenants`** - Isolated per tenant (single-tenant data)
-
-### **Configuration Example**
-
-```javascript
-const config = {
-  databases: {
-    metadata: {
-      generic: { 
-        key: 'meta-generic', 
-        mongoUri: 'mongodb://meta-generic:27017', 
-        dbName: 'meta_generic' 
-      },
-      tenants: [
-        { 
-          key: 'meta-tenant-a', 
-          extIdentifier: 'tenant-a', 
-          mongoUri: 'mongodb://meta-tenant-a:27017', 
-          dbName: 'meta_tenant_a' 
-        }
-      ]
-    },
-    runtime: {
-      generic: { 
-        key: 'runtime-generic', 
-        mongoUri: 'mongodb://runtime-generic:27017', 
-        dbName: 'runtime_generic' 
-      },
-      tenants: [
-        { 
-          key: 'runtime-tenant-a', 
-          extIdentifier: 'tenant-a', 
-          mongoUri: 'mongodb://runtime-tenant-a:27017', 
-          dbName: 'runtime_tenant_a' 
-        }
-      ]
-    }
-  },
-  spacesConns: [/* S3 config */],
-  counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'chronos_counters' },
-  routing: { hashAlgo: 'rendezvous' },
-  retention: {},
-  rollup: {}
-};
-```
-
-### **Usage Patterns**
-
-**Option A: Direct Key Usage (Simplest)**
-```javascript
-const ops = chronos.with({
-  key: 'runtime-tenant-a',  // Direct lookup
-  collection: 'users'
-});
-```
-
-**Option B: Tier + ExtIdentifier Usage**
-```javascript
-const ops = chronos.with({
-  databaseType: 'runtime',
-  tier: 'tenant',
-  extIdentifier: 'tenant-a',  // Maps to 'runtime-tenant-a'
-  collection: 'users'
-});
-```
-
-**Option C: Generic Tier**
-```javascript
-const ops = chronos.with({
-  databaseType: 'metadata',
-  tier: 'generic',
-  collection: 'config'
-});
-```
-
----
-
-## Validation
-
-Chronos validates configuration on init:
-
-```javascript
-try {
-  const chronos = initChronos(config);
-} catch (error) {
-  console.error('Config validation failed:', error.message);
-  // Clear error messages with secret redaction
-}
-```
-
----
-
-See [API Reference](./API.md) for usage documentation.
-
+- Check the main [README.md](../README.md) for detailed configuration options
+- Review the [API documentation](API.md) for usage examples
+- See [examples/](../examples/) for complete configuration examples

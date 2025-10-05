@@ -10,541 +10,355 @@ This configuration is designed for a production environment using AWS S3 as the 
 
 **File:** `examples/aws-config.json`
 
+### Key Features:
+- **Multiple MongoDB Clusters**: Uses separate clusters for different database types
+- **Multi-Region S3**: Configured for both US East and EU West regions
+- **Tenant Isolation**: Each tenant has its own database and S3 buckets
+- **Key-Based Mapping**: Uses `key` fields for unique identification and `spacesConnKey`/`mongoConnKey` for connections
+
+### Configuration Structure:
+
 ```json
 {
-  "databases": {
-    "metadata": {
-      "generic": {
-        "key": "meta-generic",
-        "mongoUri": "mongodb+srv://username:password@cluster-a.mongodb.net/metadata?retryWrites=true&w=majority",
-        "dbName": "metadata_generic"
-      },
-      "tenants": [
-        {
-          "key": "meta-tenant-a",
-          "extIdentifier": "tenant-a",
-          "mongoUri": "mongodb+srv://username:password@cluster-b.mongodb.net/metadata?retryWrites=true&w=majority",
-          "dbName": "metadata_tenant_a"
-        }
-      ]
+  "mongoConns": [
+    {
+      "key": "mongo-cluster-a",
+      "mongoUri": "mongodb+srv://username:password@cluster-a.mongodb.net?retryWrites=true&w=majority"
     },
-    "runtime": {
-      "generic": {
-        "key": "runtime-generic",
-        "mongoUri": "mongodb+srv://username:password@cluster-a.mongodb.net/runtime?retryWrites=true&w=majority",
-        "dbName": "runtime_generic"
-      },
-      "tenants": [
-        {
-          "key": "runtime-tenant-a",
-          "extIdentifier": "tenant-a",
-          "mongoUri": "mongodb+srv://username:password@cluster-b.mongodb.net/runtime?retryWrites=true&w=majority",
-          "dbName": "runtime_tenant_a"
-        }
-      ]
+    {
+      "key": "mongo-cluster-b", 
+      "mongoUri": "mongodb+srv://username:password@cluster-b.mongodb.net?retryWrites=true&w=majority"
+    }
+  ],
+  "databases": {
+    "metadata": [
+      {
+        "key": "meta-tenant-a",
+        "tenantId": "tenant-a",
+        "mongoConnKey": "mongo-cluster-b",
+        "dbName": "metadata_tenant_a",
+        "spacesConnKey": "aws-us-east-1"
+      }
+    ],
+    "runtime": [
+      {
+        "key": "runtime-tenant-a",
+        "tenantId": "tenant-a",
+        "mongoConnKey": "mongo-cluster-b",
+        "dbName": "runtime_tenant_a",
+        "spacesConnKey": "aws-us-east-1"
+      }
+    ],
+    "logs": {
+      "connection": {
+        "key": "logs-main",
+        "mongoConnKey": "mongo-cluster-a",
+        "dbName": "chronos_logs",
+        "spacesConnKey": "aws-us-east-1"
+      }
     }
   },
   "spacesConns": [
     {
+      "key": "aws-us-east-1",
       "endpoint": "https://s3.us-east-1.amazonaws.com",
       "region": "us-east-1",
       "accessKey": "YOUR_AWS_ACCESS_KEY",
       "secretKey": "YOUR_AWS_SECRET_KEY",
-      "backupsBucket": "chronos-backups-us-east-1",
-      "jsonBucket": "chronos-json-us-east-1",
-      "contentBucket": "chronos-content-us-east-1",
+      "buckets": {
+        "json": "chronos-json-us-east-1",
+        "content": "chronos-content-us-east-1",
+        "versions": "chronos-versions-us-east-1",
+        "backup": "chronos-backups-us-east-1"
+      },
       "forcePathStyle": false
     },
     {
+      "key": "aws-eu-west-1",
       "endpoint": "https://s3.eu-west-1.amazonaws.com",
       "region": "eu-west-1",
       "accessKey": "YOUR_AWS_ACCESS_KEY_2",
       "secretKey": "YOUR_AWS_SECRET_KEY_2",
-      "backupsBucket": "chronos-backups-eu-west-1",
-      "jsonBucket": "chronos-json-eu-west-1",
-      "contentBucket": "chronos-content-eu-west-1",
-      "forcePathStyle": false
-    }
-  ],
-  "counters": {
-    "mongoUri": "mongodb+srv://username:password@cluster-metrics.mongodb.net/counters?retryWrites=true&w=majority",
-    "dbName": "chronos_counters"
-  },
-  "routing": {
-    "hashAlgo": "rendezvous",
-    "chooseKey": "tenantId|dbName"
-  },
-  "retention": {
-    "ver": { "days": 60, "maxPerItem": 30 },
-    "counters": { "days": 365, "weeks": 260, "months": 120 }
-  },
-  "rollup": {
-    "enabled": true,
-    "manifestPeriod": "daily"
-  },
-  "collectionMaps": {
-    "kycDocuments": {
-      "indexedProps": ["clientId", "documentType", "issuedCountry"],
-      "base64Props": { 
-        "fileContent": { 
-          "contentType": "application/pdf",
-          "preferredText": false
-        } 
+      "buckets": {
+        "json": "chronos-json-eu-west-1",
+        "content": "chronos-content-eu-west-1",
+        "versions": "chronos-versions-eu-west-1",
+        "backup": "chronos-backups-eu-west-1"
       },
-      "validation": { 
-        "requiredIndexed": ["clientId", "documentType"] 
-      }
-    },
-    "profiles": {
-      "indexedProps": ["customerId", "preferences.language", "preferences.notifications"],
-      "base64Props": { 
-        "avatar": { 
-          "contentType": "image/png",
-          "preferredText": false
-        } 
-      }
-    }
-  },
-  "devShadow": {
-    "enabled": true,
-    "ttlHours": 24,
-    "maxBytesPerDoc": 1048576
-  },
-  "fallback": {
-    "enabled": true,
-    "maxRetries": 3,
-    "retryDelayMs": 1000,
-    "maxDelayMs": 60000,
-    "deadLetterCollection": "chronos_fallback_dead"
-  },
-  "transactions": {
-    "enabled": true,
-    "autoDetect": true
-  }
-}
-```
-
-### Key Configuration Sections:
-
-- **`databases`**: The main database configuration object that defines all database connections organized by type and tier.
-  ```json
-  "databases": {
-    "metadata": {
-      "generic": { 
-        "key": "meta-generic", 
-        "mongoUri": "mongodb+srv://username:password@cluster-a.mongodb.net/metadata?retryWrites=true&w=majority", 
-        "dbName": "metadata_generic" 
-      },
-      "tenants": [
-        { 
-          "key": "meta-tenant-a", 
-          "extIdentifier": "tenant-a", 
-          "mongoUri": "mongodb+srv://username:password@cluster-b.mongodb.net/metadata?retryWrites=true&w=majority", 
-          "dbName": "metadata_tenant_a" 
-        }
-      ]
-    },
-    "runtime": {
-      "generic": { 
-        "key": "runtime-generic", 
-        "mongoUri": "mongodb+srv://username:password@cluster-a.mongodb.net/runtime?retryWrites=true&w=majority", 
-        "dbName": "runtime_generic" 
-      },
-      "tenants": [
-        { 
-          "key": "runtime-tenant-a", 
-          "extIdentifier": "tenant-a", 
-          "mongoUri": "mongodb+srv://username:password@cluster-b.mongodb.net/runtime?retryWrites=true&w=majority", 
-          "dbName": "runtime_tenant_a" 
-        }
-      ]
-    }
-  }
-  ```
-  - **Explanation**: This defines the database connections organized by type (`metadata`, `knowledge`, `runtime`) and tier (`generic`, `domains`, `tenants`). Each connection has a unique `key`, `mongoUri`, `dbName`, and optional `extIdentifier` for mapping.
-
-- **`spacesConns`**: An array of S3-compatible storage connection configurations. Each entry corresponds to a database connection by index.
-  ```json
-  "spacesConns": [
-    {
-      "endpoint": "https://s3.us-east-1.amazonaws.com",
-      "region": "us-east-1",
-      "accessKey": "YOUR_AWS_ACCESS_KEY",
-      "secretKey": "YOUR_AWS_SECRET_KEY",
-      "backupsBucket": "chronos-backups-us-east-1",
-      "jsonBucket": "chronos-json-us-east-1",
-      "contentBucket": "chronos-content-us-east-1",
       "forcePathStyle": false
     }
   ]
-  ```
-  - **Explanation**: These define the connections to your S3 buckets. `endpoint`, `region`, `accessKey`, and `secretKey` are standard S3 credentials. `backupsBucket`, `jsonBucket`, and `contentBucket` specify the names of the buckets used for different types of data storage. `forcePathStyle` is often `false` for AWS S3 but can be `true` for some S3-compatible services like MinIO.
+}
+```
 
-- **`counters`**: Configuration for the dedicated counters database.
-  ```json
-  "counters": {
-    "mongoUri": "mongodb+srv://username:password@cluster-metrics.mongodb.net/counters?retryWrites=true&w=majority",
-    "dbName": "chronos_counters"
-  }
-  ```
-  - **Explanation**: `chronos-db` uses a separate MongoDB database for storing counter totals, which can be useful for analytics without impacting primary data operations.
+### Field Explanations:
 
-- **`routing`**: Defines how `chronos-db` routes requests to different backends.
-  ```json
-  "routing": {
-    "hashAlgo": "rendezvous",
-    "chooseKey": "tenantId|dbName"
-  }
-  ```
-  - **Explanation**: `hashAlgo` specifies the consistent hashing algorithm (`rendezvous` or `jump`). `chooseKey` defines the DSL (Domain Specific Language) for generating the routing key. Here, it uses `tenantId` and `dbName` to determine which backend to use.
-
-- **`retention`**: Policies for data retention.
-  ```json
-  "retention": {
-    "ver": { "days": 60, "maxPerItem": 30 },
-    "counters": { "days": 365, "weeks": 260, "months": 120 }
-  }
-  ```
-  - **Explanation**: `ver` defines retention for item versions (e.g., keep versions for 60 days, max 30 versions per item). `counters` defines retention for counter data.
-
-- **`rollup`**: Configuration for data rollup (e.g., daily manifests).
-  ```json
-  "rollup": {
-    "enabled": true,
-    "manifestPeriod": "daily"
-  }
-  ```
-  - **Explanation**: If enabled, `chronos-db` can create periodic manifests of data, useful for auditing or data warehousing.
-
-- **`collectionMaps`**: Defines schema and indexing for specific collections.
-  ```json
-  "collectionMaps": {
-    "kycDocuments": {
-      "indexedProps": ["clientId", "documentType", "issuedCountry"],
-      "base64Props": { 
-        "fileContent": { 
-          "contentType": "application/pdf",
-          "preferredText": false
-        } 
-      },
-      "validation": { 
-        "requiredIndexed": ["clientId", "documentType"] 
-      }
-    }
-  }
-  ```
-  - **Explanation**: For `kycDocuments`, `clientId`, `documentType`, and `issuedCountry` are indexed. `fileContent` is stored as base64 with a specified content type. `clientId` and `documentType` are required indexed fields.
-
-- **`devShadow`**: Configuration for development shadow storage.
-  ```json
-  "devShadow": {
-    "enabled": true,
-    "ttlHours": 24,
-    "maxBytesPerDoc": 1048576
-  }
-  ```
-  - **Explanation**: Enables a temporary shadow copy of data in MongoDB for a specified TTL, useful for development and debugging.
-
-- **`fallback`**: Configuration for the fallback queue.
-  ```json
-  "fallback": {
-    "enabled": true,
-    "maxRetries": 3,
-    "retryDelayMs": 1000,
-    "maxDelayMs": 60000,
-    "deadLetterCollection": "chronos_fallback_dead"
-  }
-  ```
-  - **Explanation**: Ensures durability by retrying failed operations and moving them to a dead-letter queue if retries are exhausted.
-
-- **`transactions`**: Configuration for MongoDB transactions.
-  ```json
-  "transactions": {
-    "enabled": true,
-    "autoDetect": true
-  }
-  ```
-  - **Explanation**: Enables MongoDB transactions for atomic operations, with `autoDetect` attempting to determine if the MongoDB instance supports transactions (e.g., a replica set).
+- **`mongoConns`**: Array of MongoDB connection configurations, each with a unique `key` for reference
+- **`databases.metadata`**: Array of metadata database connections for tenant-specific metadata storage
+- **`databases.runtime`**: Array of runtime database connections for application data
+- **`databases.logs`**: Single logs database configuration (no tiers)
+- **`spacesConns`**: Array of S3-compatible storage connections, each with a unique `key` for reference
+- **`key`**: Globally unique identifier for each connection/database
+- **`mongoConnKey`**: References a MongoDB connection from the `mongoConns` array
+- **`spacesConnKey`**: References an S3 connection from the `spacesConns` array
+- **`tenantId`**: External identifier for tenant mapping (not unique across connections)
+- **`buckets`**: Object containing all required bucket names (json, content, versions, backup)
 
 ---
 
 ## 2. DigitalOcean Spaces Configuration (`do-config.json`)
 
-This configuration is tailored for DigitalOcean Spaces, an S3-compatible object storage service. It demonstrates a single-backend setup with runtime database only.
+This configuration demonstrates how to use DigitalOcean Spaces as the S3-compatible storage backend with MongoDB Atlas for data persistence.
 
 **File:** `examples/do-config.json`
 
+### Key Features:
+- **DigitalOcean Spaces**: S3-compatible object storage with regional endpoints
+- **MongoDB Atlas**: Cloud-hosted MongoDB for scalability
+- **Simplified Setup**: Single region configuration for easier management
+- **Production Ready**: Includes comprehensive retention and rollup policies
+
+### Configuration Structure:
+
 ```json
 {
-  "databases": {
-    "runtime": {
-      "generic": {
-        "key": "runtime-generic",
-        "mongoUri": "mongodb+srv://username:password@cluster-name.mongodb.net/runtime?retryWrites=true&w=majority",
-        "dbName": "runtime_generic"
-      },
-      "tenants": [
-        {
-          "key": "runtime-tenant-a",
-          "extIdentifier": "tenant-a",
-          "mongoUri": "mongodb+srv://username:password@cluster-name.mongodb.net/runtime?retryWrites=true&w=majority",
-          "dbName": "runtime_tenant_a"
-        }
-      ]
-    }
-  },
-  "spacesConns": [
+  "mongoConns": [
     {
-      "endpoint": "https://nyc3.digitaloceanspaces.com",
-      "region": "nyc3",
-      "accessKey": "YOUR_DO_SPACES_ACCESS_KEY",
-      "secretKey": "YOUR_DO_SPACES_SECRET_KEY",
-      "backupsBucket": "chronos-backups-nyc3",
-      "jsonBucket": "chronos-json-nyc3",
-      "contentBucket": "chronos-content-nyc3",
-      "forcePathStyle": false
+      "key": "mongo-cluster-main",
+      "mongoUri": "mongodb+srv://username:password@cluster-name.mongodb.net?retryWrites=true&w=majority"
     }
   ],
-  "counters": {
-    "mongoUri": "mongodb+srv://username:password@cluster-name.mongodb.net/counters?retryWrites=true&w=majority",
-    "dbName": "chronos_counters"
-  },
-  "routing": {
-    "hashAlgo": "rendezvous",
-    "chooseKey": "tenantId|dbName"
-  },
-  "retention": {
-    "ver": { "days": 30, "maxPerItem": 10 },
-    "counters": { "days": 90, "weeks": 12, "months": 6 }
-  },
-  "rollup": {
-    "enabled": false,
-    "manifestPeriod": "daily"
-  },
-  "collectionMaps": {
-    "users": {
-      "indexedProps": ["email", "status"],
-      "validation": {
-        "requiredIndexed": ["email"]
+  "databases": {
+    "runtime": [
+      {
+        "key": "runtime-tenant-a",
+        "tenantId": "tenant-a",
+        "mongoConnKey": "mongo-cluster-main",
+        "dbName": "runtime_tenant_a",
+        "spacesConnKey": "do-spaces-nyc3"
+      }
+    ],
+    "logs": {
+      "connection": {
+        "key": "logs-main",
+        "mongoConnKey": "mongo-cluster-main",
+        "dbName": "chronos_logs",
+        "spacesConnKey": "do-spaces-nyc3"
       }
     }
   },
-  "devShadow": {
-    "enabled": false,
-    "ttlHours": 24,
-    "maxBytesPerDoc": 1048576
-  },
-  "fallback": {
-    "enabled": true,
-    "maxRetries": 3,
-    "retryDelayMs": 1000,
-    "maxDelayMs": 60000,
-    "deadLetterCollection": "chronos_fallback_dead"
-  },
-  "transactions": {
-    "enabled": true,
-    "autoDetect": true
-  }
-}
-```
-
-### Key Configuration Sections:
-
-- **`databases`**: Single runtime database configuration.
-  ```json
-  "databases": {
-    "runtime": {
-      "generic": {
-        "key": "runtime-generic",
-        "mongoUri": "mongodb+srv://username:password@cluster-name.mongodb.net/runtime?retryWrites=true&w=majority",
-        "dbName": "runtime_generic"
-      },
-      "tenants": [
-        {
-          "key": "runtime-tenant-a",
-          "extIdentifier": "tenant-a",
-          "mongoUri": "mongodb+srv://username:password@cluster-name.mongodb.net/runtime?retryWrites=true&w=majority",
-          "dbName": "runtime_tenant_a"
-        }
-      ]
-    }
-  }
-  ```
-  - **Explanation**: This configuration only uses the `runtime` database type, with both generic and tenant-specific connections.
-
-- **`spacesConns`**: Single DigitalOcean Spaces connection.
-  ```json
   "spacesConns": [
     {
+      "key": "do-spaces-nyc3",
       "endpoint": "https://nyc3.digitaloceanspaces.com",
       "region": "nyc3",
       "accessKey": "YOUR_DO_SPACES_ACCESS_KEY",
       "secretKey": "YOUR_DO_SPACES_SECRET_KEY",
-      "backupsBucket": "chronos-backups-nyc3",
-      "jsonBucket": "chronos-json-nyc3",
-      "contentBucket": "chronos-content-nyc3",
+      "buckets": {
+        "json": "chronos-json-nyc3",
+        "content": "chronos-content-nyc3",
+        "versions": "chronos-versions-nyc3",
+        "backup": "chronos-backups-nyc3"
+      },
       "forcePathStyle": false
     }
   ]
-  ```
-  - **Explanation**: The `endpoint` will be specific to your DigitalOcean Space's region. `forcePathStyle` is typically `false` for DigitalOcean Spaces.
+}
+```
 
-- **Other sections**: `counters`, `routing`, `retention`, `rollup`, `collectionMaps`, `devShadow`, `fallback`, and `transactions` are configured similarly to the AWS example, adapted for a single-backend setup.
+### DigitalOcean Specific Notes:
+
+- **Endpoint Format**: `https://{region}.digitaloceanspaces.com`
+- **Region**: Use DigitalOcean region codes (nyc3, sfo3, fra1, etc.)
+- **Force Path Style**: Set to `false` for DigitalOcean Spaces
+- **Access Keys**: Generate from DigitalOcean Control Panel → API → Spaces Keys
 
 ---
 
-## 3. MinIO Local Storage Configuration (`minio-config.json`)
+## 3. MinIO Local Configuration (`minio-config.json`)
 
-This configuration is ideal for local development and testing environments using MinIO, a high-performance, S3-compatible object storage server that can run locally.
+This configuration is perfect for local development and testing using MinIO as a local S3-compatible storage server.
 
 **File:** `examples/minio-config.json`
 
+### Key Features:
+- **Local Development**: Perfect for development and testing environments
+- **MinIO Server**: Self-hosted S3-compatible object storage
+- **Simple Setup**: Single MongoDB instance and MinIO server
+- **Development Features**: Includes devShadow for testing TTL behavior
+
+### Configuration Structure:
+
 ```json
 {
+  "mongoConns": [
+    {
+      "key": "mongo-local",
+      "mongoUri": "mongodb://localhost:27017"
+    }
+  ],
   "databases": {
-    "runtime": {
-      "generic": {
-        "key": "runtime-generic",
-        "mongoUri": "mongodb://localhost:27017/runtime",
-        "dbName": "runtime_generic"
+    "runtime": [
+      {
+        "key": "runtime-local",
+        "mongoConnKey": "mongo-local",
+        "tenantId": "local",
+        "spacesConnKey": "minio-local",
+        "dbName": "runtime_local"
+      }
+    ],
+    "logs": {
+      "connection": {
+        "key": "logs-local",
+        "mongoConnKey": "mongo-local",
+        "dbName": "chronos_logs",
+        "spacesConnKey": "minio-local"
       }
     }
   },
   "spacesConns": [
     {
+      "key": "minio-local",
       "endpoint": "http://localhost:9000",
       "region": "us-east-1",
       "accessKey": "minioadmin",
       "secretKey": "minioadmin",
-      "backupsBucket": "chronos-backups",
-      "jsonBucket": "chronos-json",
-      "contentBucket": "chronos-content",
+      "buckets": {
+        "json": "chronos-json",
+        "content": "chronos-content",
+        "versions": "chronos-versions",
+        "backup": "chronos-backups"
+      },
       "forcePathStyle": true
     }
-  ],
-  "counters": {
-    "mongoUri": "mongodb://localhost:27017/counters",
-    "dbName": "chronos_counters"
-  },
-  "routing": {
-    "hashAlgo": "rendezvous",
-    "chooseKey": "tenantId|dbName"
-  },
-  "retention": {
-    "ver": { "days": 7, "maxPerItem": 5 },
-    "counters": { "days": 30, "weeks": 4, "months": 2 }
-  },
-  "rollup": {
-    "enabled": false,
-    "manifestPeriod": "daily"
-  },
-  "collectionMaps": {
-    "testData": {
-      "indexedProps": ["name", "category"],
-      "validation": {
-        "requiredIndexed": ["name"]
-      }
+  ]
+}
+```
+
+### MinIO Specific Notes:
+
+- **Endpoint**: Usually `http://localhost:9000` for local MinIO
+- **Default Credentials**: `minioadmin` / `minioadmin` (change in production!)
+- **Force Path Style**: Set to `true` for MinIO compatibility
+- **Region**: Can be any valid AWS region name
+
+---
+
+## Key Concepts Explained
+
+### 1. Connection Mapping System
+
+The new configuration uses a **key-based mapping system** that provides several benefits:
+
+- **Reusability**: One MongoDB connection can serve multiple databases
+- **Flexibility**: One S3 connection can serve multiple database types
+- **Clarity**: Explicit relationships between components
+- **Maintainability**: Easy to update connection details in one place
+
+### 2. Database Types
+
+- **`metadata`**: Stores system metadata, indexes, and configuration data
+- **`knowledge`**: Stores structured knowledge, documents, and content
+- **`runtime`**: Stores application runtime data and user-generated content
+- **`logs`**: Stores system logs and audit trails (no tiers, simple structure)
+
+### 3. Bucket Organization
+
+Each S3 connection defines four bucket types:
+
+- **`json`**: Stores JSON data files (chronos-jsons)
+- **`content`**: Stores binary content files (images, documents, etc.)
+- **`versions`**: Stores version manifests and rollup data
+- **`backup`**: Stores backup data (optional, can reuse json bucket)
+
+### 4. Tenant Isolation
+
+Tenants are isolated through:
+
+- **Separate Databases**: Each tenant gets its own MongoDB database
+- **Separate Buckets**: Each tenant can use different S3 buckets
+- **Tenant ID**: External identifier for mapping and routing
+- **Unique Keys**: Globally unique identifiers for direct routing
+
+---
+
+## Migration from Previous Versions
+
+If you're upgrading from a previous version of chronos-db:
+
+1. **Remove `mongoUris` array**: Replace with `mongoConns` array
+2. **Add `key` fields**: Each connection needs a unique key
+3. **Update database structure**: Use direct arrays instead of nested objects
+4. **Add `spacesConnKey`**: Link databases to S3 connections
+5. **Update bucket structure**: Use `buckets` object instead of individual fields
+
+### Example Migration:
+
+**Before (v1.4.x):**
+```json
+{
+  "mongoUris": ["mongodb://localhost:27017"],
+  "spacesConns": [{
+    "endpoint": "http://localhost:9000",
+    "jsonBucket": "chronos-json",
+    "contentBucket": "chronos-content"
+  }]
+}
+```
+
+**After (v1.5.x):**
+```json
+{
+  "mongoConns": [{
+    "key": "mongo-local",
+    "mongoUri": "mongodb://localhost:27017"
+  }],
+  "spacesConns": [{
+    "key": "minio-local",
+    "endpoint": "http://localhost:9000",
+    "buckets": {
+      "json": "chronos-json",
+      "content": "chronos-content",
+      "versions": "chronos-versions"
     }
-  },
-  "devShadow": {
-    "enabled": true,
-    "ttlHours": 2,
-    "maxBytesPerDoc": 1048576
-  },
-  "fallback": {
-    "enabled": false,
-    "maxRetries": 3,
-    "retryDelayMs": 1000,
-    "maxDelayMs": 60000,
-    "deadLetterCollection": "chronos_fallback_dead"
-  },
-  "transactions": {
-    "enabled": true,
-    "autoDetect": true
+  }],
+  "databases": {
+    "runtime": [{
+      "key": "runtime-local",
+      "mongoConnKey": "mongo-local",
+      "spacesConnKey": "minio-local",
+      "dbName": "runtime_local"
+    }]
   }
 }
 ```
 
-### Key Configuration Sections:
+---
 
-- **`databases`**: Single local runtime database configuration.
-  ```json
-  "databases": {
-    "runtime": {
-      "generic": {
-        "key": "runtime-generic",
-        "mongoUri": "mongodb://localhost:27017/runtime",
-        "dbName": "runtime_generic"
-      }
-    }
-  }
-  ```
-  - **Explanation**: Simple local MongoDB setup with a single runtime database.
+## Best Practices
 
-- **`spacesConns`**: Single MinIO connection.
-  ```json
-  "spacesConns": [
-    {
-      "endpoint": "http://localhost:9000",
-      "region": "us-east-1",
-      "accessKey": "minioadmin",
-      "secretKey": "minioadmin",
-      "backupsBucket": "chronos-backups",
-      "jsonBucket": "chronos-json",
-      "contentBucket": "chronos-content",
-      "forcePathStyle": true
-    }
-  ]
-  ```
-  - **Explanation**: For MinIO running locally, the `endpoint` is typically `http://localhost:9000`. `accessKey` and `secretKey` are often default MinIO credentials. **Crucially, `forcePathStyle` is set to `true` for MinIO** to ensure correct URL resolution.
-
-- **Other sections**: `counters`, `routing`, `retention`, `rollup`, `collectionMaps`, `devShadow`, `fallback`, and `transactions` are configured for a local development environment, often with `enabled: false` or shorter TTLs for `devShadow`.
+1. **Use Descriptive Keys**: Make keys meaningful (e.g., `mongo-cluster-prod`, `aws-us-east-1`)
+2. **Separate Environments**: Use different configurations for dev/staging/prod
+3. **Bucket Naming**: Include environment/region in bucket names
+4. **Security**: Never commit real credentials to version control
+5. **Testing**: Use MinIO for local development and testing
+6. **Monitoring**: Enable logs database for system monitoring
+7. **Backups**: Configure rollup and retention policies appropriately
 
 ---
 
-## 🎯 Usage Patterns
+## Troubleshooting
 
-### Direct Key Usage (Simplest)
-```javascript
-const ops = chronos.with({ 
-  key: 'runtime-tenant-a',  // Direct lookup
-  collection: 'users' 
-});
-```
+### Common Issues:
 
-### Tier + ExtIdentifier Usage
-```javascript
-const ops = chronos.with({ 
-  databaseType: 'runtime',
-  tier: 'tenant',
-  extIdentifier: 'tenant-a',  // Maps to 'runtime-tenant-a'
-  collection: 'users' 
-});
-```
+1. **"S3 connection not found"**: Check that `spacesConnKey` matches a `key` in `spacesConns`
+2. **"MongoDB connection not found"**: Check that `mongoConnKey` matches a `key` in `mongoConns`
+3. **"Bucket does not exist"**: Ensure buckets are created in your S3-compatible storage
+4. **"Access denied"**: Verify S3 credentials and permissions
+5. **"Invalid endpoint"**: Check endpoint URL format for your S3 provider
 
-### Generic Tier Usage
-```javascript
-const ops = chronos.with({ 
-  databaseType: 'metadata',
-  tier: 'generic',
-  collection: 'config' 
-});
-```
+### Getting Help:
 
----
-
-## 🔧 Configuration Tips
-
-1. **Database Types**: You can omit any database type (`metadata`, `knowledge`, `runtime`) if you don't need it.
-
-2. **Tiers**: Each database type can have `generic`, `domains`, and/or `tenants` tiers. You only need to define the tiers you use.
-
-3. **Keys**: Each database connection must have a unique `key` across all database types and tiers.
-
-4. **ExtIdentifiers**: These are optional external identifiers used for mapping. They don't need to be unique across different tiers.
-
-5. **S3 Compatibility**: All configurations work with any S3-compatible storage (AWS S3, DigitalOcean Spaces, MinIO, etc.).
-
-6. **Local Development**: Use MinIO or localStorage for local development to avoid cloud storage costs.
-
-7. **Production**: Use proper S3-compatible storage with appropriate retention policies and fallback queues enabled.
+- Check the main [README.md](../README.md) for detailed configuration options
+- Review the [API documentation](../docs/API.md) for usage examples
+- See [CONFIGURATION.md](../docs/CONFIGURATION.md) for advanced configuration options

@@ -74,7 +74,7 @@ export async function health(router: BridgeRouter, config: ChronosConfig): Promi
         }
         
         // Lightweight check - try to list objects
-        await storage.list(spaces.jsonBucket, '', { maxKeys: 1 });
+        await storage.list(spaces.buckets.json, '', { maxKeys: 1 });
         return { index: backend.index, ok: true };
       } catch (error) {
         return { 

@@ -1,55 +1,69 @@
 {
-  "databases": {
-    "metadata": {
-      "generic": {
-        "key": "meta-generic",
-        "mongoUri": "mongodb+srv://username:password@cluster-a.mongodb.net/metadata?retryWrites=true&w=majority",
-        "dbName": "metadata_generic"
-      },
-      "tenants": [
-        {
-          "key": "meta-tenant-a",
-          "extIdentifier": "tenant-a",
-          "mongoUri": "mongodb+srv://username:password@cluster-b.mongodb.net/metadata?retryWrites=true&w=majority",
-          "dbName": "metadata_tenant_a"
-        }
-      ]
+  "mongoConns": [
+    {
+      "key": "mongo-cluster-a",
+      "mongoUri": "mongodb+srv://username:password@cluster-a.mongodb.net?retryWrites=true&w=majority"
     },
-    "runtime": {
-      "generic": {
-        "key": "runtime-generic",
-        "mongoUri": "mongodb+srv://username:password@cluster-a.mongodb.net/runtime?retryWrites=true&w=majority",
-        "dbName": "runtime_generic"
-      },
-      "tenants": [
-        {
-          "key": "runtime-tenant-a",
-          "extIdentifier": "tenant-a",
-          "mongoUri": "mongodb+srv://username:password@cluster-b.mongodb.net/runtime?retryWrites=true&w=majority",
-          "dbName": "runtime_tenant_a"
-        }
-      ]
+    {
+      "key": "mongo-cluster-b", 
+      "mongoUri": "mongodb+srv://username:password@cluster-b.mongodb.net?retryWrites=true&w=majority"
+    }
+  ],
+  "databases": {
+    "metadata": [
+      {
+        "key": "meta-tenant-a",
+        "tenantId": "tenant-a",
+        "mongoConnKey": "mongo-cluster-b",
+        "dbName": "metadata_tenant_a",
+        "spacesConnKey": "aws-us-east-1"
+      }
+    ],
+    "runtime": [
+      {
+        "key": "runtime-tenant-a",
+        "tenantId": "tenant-a",
+        "mongoConnKey": "mongo-cluster-b",
+        "dbName": "runtime_tenant_a",
+        "spacesConnKey": "aws-us-east-1"
+      }
+    ],
+    "logs": {
+      "connection": {
+        "key": "logs-main",
+        "mongoConnKey": "mongo-cluster-a",
+        "dbName": "chronos_logs",
+        "spacesConnKey": "aws-us-east-1"
+      }
     }
   },
   "spacesConns": [
     {
+      "key": "aws-us-east-1",
       "endpoint": "https://s3.us-east-1.amazonaws.com",
       "region": "us-east-1",
       "accessKey": "YOUR_AWS_ACCESS_KEY",
       "secretKey": "YOUR_AWS_SECRET_KEY",
-      "backupsBucket": "chronos-backups-us-east-1",
-      "jsonBucket": "chronos-json-us-east-1",
-      "contentBucket": "chronos-content-us-east-1",
+      "buckets": {
+        "json": "chronos-json-us-east-1",
+        "content": "chronos-content-us-east-1",
+        "versions": "chronos-versions-us-east-1",
+        "backup": "chronos-backups-us-east-1"
+      },
       "forcePathStyle": false
     },
     {
+      "key": "aws-eu-west-1",
       "endpoint": "https://s3.eu-west-1.amazonaws.com",
       "region": "eu-west-1",
       "accessKey": "YOUR_AWS_ACCESS_KEY_2",
       "secretKey": "YOUR_AWS_SECRET_KEY_2",
-      "backupsBucket": "chronos-backups-eu-west-1",
-      "jsonBucket": "chronos-json-eu-west-1",
-      "contentBucket": "chronos-content-eu-west-1",
+      "buckets": {
+        "json": "chronos-json-eu-west-1",
+        "content": "chronos-content-eu-west-1",
+        "versions": "chronos-versions-eu-west-1",
+        "backup": "chronos-backups-eu-west-1"
+      },
       "forcePathStyle": false
     }
   ],

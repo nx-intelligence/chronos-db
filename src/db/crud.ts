@@ -278,7 +278,7 @@ export async function createItem(
           try {
             const externalizeResult = await externalizeBase64({
               storage,
-              contentBucket: spaces.contentBucket,
+              contentBucket: spaces.buckets.content,
               collection: ctx.collection,
               idHex,
               ov,
@@ -316,7 +316,7 @@ export async function createItem(
         let sha256: string;
 
         // VERBOSE: Log storage operation details
-        logger.storageOperation('putJSON', spaces.jsonBucket, jKey, transformed, {
+        logger.storageOperation('putJSON', spaces.buckets.json, jKey, transformed, {
           operation: 'CREATE',
           collection: ctx.collection,
           itemId: idHex,
@@ -324,7 +324,7 @@ export async function createItem(
         });
 
         try {
-          const result = await storage.putJSON(spaces.jsonBucket, jKey, transformed);
+          const result = await storage.putJSON(spaces.buckets.json, jKey, transformed);
           size = result.size ?? 0;
           sha256 = result.sha256 || '';
           writtenKeys.push(jKey);
@@ -364,7 +364,7 @@ export async function createItem(
               at: now,
               ...(actor && { actor }),
               ...(reason && { reason }),
-              jsonBucket: spaces.jsonBucket,
+              jsonBucket: spaces.buckets.json,
               jsonKey: jKey,
               metaIndexed,
               size: size ?? 0,
@@ -377,7 +377,7 @@ export async function createItem(
               itemId: id,
               ov,
               cv,
-              jsonBucket: spaces.jsonBucket,
+              jsonBucket: spaces.buckets.json,
               jsonKey: jKey,
               metaIndexed,
               size: size ?? 0,
@@ -419,7 +419,7 @@ export async function createItem(
           });
         } catch (error) {
           // Compensation: delete written S3 keys
-          await compensateS3(storage, spaces.jsonBucket, spaces.contentBucket, writtenKeys);
+          await compensateS3(storage, spaces.buckets.json, spaces.buckets.content, writtenKeys);
           
           throw new TxnError(
             `Operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -586,7 +586,7 @@ export async function updateItem(
           try {
             const externalizeResult = await externalizeBase64({
               storage,
-              contentBucket: spaces.contentBucket,
+              contentBucket: spaces.buckets.content,
               collection: ctx.collection,
               idHex: id,
               ov,
@@ -620,7 +620,7 @@ export async function updateItem(
         let sha256: string;
 
         try {
-          const result = await storage.putJSON(spaces.jsonBucket, jKey, transformed);
+          const result = await storage.putJSON(spaces.buckets.json, jKey, transformed);
           size = result.size ?? 0;
           sha256 = result.sha256 || '';
           writtenKeys.push(jKey);
@@ -656,7 +656,7 @@ export async function updateItem(
               at: now,
               ...(actor && { actor }),
               ...(reason && { reason }),
-              jsonBucket: spaces.jsonBucket,
+              jsonBucket: spaces.buckets.json,
               jsonKey: jKey,
               metaIndexed,
               size: size ?? 0,
@@ -670,7 +670,7 @@ export async function updateItem(
               itemId: new ObjectId(id),
               ov,
               cv,
-              jsonBucket: spaces.jsonBucket,
+              jsonBucket: spaces.buckets.json,
               jsonKey: jKey,
               metaIndexed,
               size: size ?? 0,
@@ -701,7 +701,7 @@ export async function updateItem(
           });
         } catch (error) {
           // Compensation: delete written S3 keys
-          await compensateS3(storage, spaces.jsonBucket, spaces.contentBucket, writtenKeys);
+          await compensateS3(storage, spaces.buckets.json, spaces.buckets.content, writtenKeys);
           
           throw new TxnError(
             `Operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,

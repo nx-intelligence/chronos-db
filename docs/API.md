@@ -29,17 +29,41 @@ See [CONFIGURATION.md](./CONFIGURATION.md) for config options.
 Bind to a specific database and collection.
 
 **Parameters:**
-- `context.dbName` (string) - Database name
-- `context.collection` (string) - Collection name
+- `context.key` (string, optional) - Direct key for routing (simplest)
+- `context.databaseType` (string, optional) - Database type: 'metadata', 'knowledge', 'runtime', 'logs'
 - `context.tenantId` (string, optional) - Tenant ID for multi-tenancy
+- `context.dbName` (string, optional) - Database name (legacy)
+- `context.collection` (string) - Collection name
+- `context.objectId` (string, optional) - Object ID
+- `context.forcedIndex` (number, optional) - Forced index for admin override
 
 **Returns:** `BoundOps` - Collection-scoped operations
 
 ```javascript
+// Option A: Direct key usage (simplest)
 const ops = chronos.with({
+  key: 'runtime-tenant-a',  // Direct lookup, no resolution needed
+  collection: 'users'
+});
+
+// Option B: Tenant-based routing
+const ops2 = chronos.with({
+  databaseType: 'runtime',
+  tenantId: 'tenant-a',     // Maps to tenant-specific database
+  collection: 'users'
+});
+
+// Option C: Logs database (no tiers)
+const ops3 = chronos.with({
+  key: 'logs-main',         // Direct key for logs database
+  collection: 'audit'
+});
+
+// Legacy usage (still supported)
+const ops4 = chronos.with({
   dbName: 'myapp',
   collection: 'users',
-  tenantId: 'tenant123',  // optional
+  tenantId: 'tenant123'
 });
 ```
 

@@ -1,21 +1,21 @@
 # Chronos-DB Quick Start Guide
 
-> **Version**: chronos-db@1.1.0+  
+> **Version**: chronos-db@1.5.0+  
 > **Last Updated**: January 2025
 
 ---
 
 ## 🎯 Overview
 
-This guide provides quick setup instructions for the enhanced chronos-db package. The new version (1.1.0+) features **optional retention/rollup policies** with sensible defaults, making it much easier to get started without complex configuration.
+This guide provides quick setup instructions for the enhanced chronos-db package. The new version (1.5.0+) features **simplified key-based configuration** with explicit connection mapping, making it much easier to manage multi-tenant setups.
 
-### ✅ What's New in v1.1.0
+### ✅ What's New in v1.5.0
 
-- **Optional Configuration**: Retention and rollup policies are now optional
-- **Sensible Defaults**: All policies default to disabled for minimal setup
-- **Auto-Schedule**: Automatic period management for rollup operations
-- **Backward Compatible**: Existing configurations continue to work
-- **ESM/CJS Fixed**: Resolved "require is not defined" errors
+- **Simplified Configuration**: Key-based mapping system for connections
+- **Explicit Relationships**: Clear mapping between MongoDB and S3 connections
+- **Flexible Structure**: Support for empty database sections
+- **No Backward Compatibility**: Clean break from old structure for better maintainability
+- **Enhanced Multi-Tenancy**: Simplified tenant management with direct key routing
 
 ---
 
@@ -43,477 +43,370 @@ import { initChronos } from 'chronos-db';
 import { initChronos } from 'chronos-db';
 
 const chronos = initChronos({
-  // Required: Database configuration
+  // MongoDB connections
+  mongoConns: [{
+    key: 'mongo-local',
+    mongoUri: 'mongodb://localhost:27017'
+  }],
+  
+  // Database configuration
   databases: {
-    runtime: {
-      generic: {
-        key: 'runtime-generic',
-        mongoUri: 'mongodb://localhost:27017',
-        dbName: 'runtime_generic'
-      }
-    }
+    runtime: [{
+      key: 'runtime-local',
+      mongoConnKey: 'mongo-local',
+      dbName: 'runtime_local'
+    }]
   },
   
-  // Required: Local storage (for development)
+  // Local storage (no S3 needed!)
   localStorage: {
     enabled: true,
     basePath: './chronos-data'
   },
   
-  // Required: Counters database
+  // Counters
   counters: {
     mongoUri: 'mongodb://localhost:27017',
     dbName: 'chronos_counters'
   },
   
-  // Required: Routing configuration
-  routing: { 
-    hashAlgo: 'rendezvous' 
-  },
-  
-  // Required: Collection definitions
-  collectionMaps: {
-    users: {
-      indexedProps: ['email', 'status', 'createdAt']
-    },
-    posts: {
-      indexedProps: ['title', 'status', 'authorId', 'createdAt']
-    }
-  }
-  
-  // ✅ No retention/rollup required - defaults to disabled!
-});
-```
-
-### Production Configuration with S3
-
-```typescript
-const chronos = initChronos({
-  // Database configuration
-  databases: {
-    runtime: {
-      generic: {
-        key: 'runtime-generic',
-        mongoUri: 'mongodb://mongo1:27017,mongo2:27017,mongo3:27017?replicaSet=rs0',
-        dbName: 'runtime_generic'
-      }
-    }
-  },
-  
-  // S3-compatible storage
-  spacesConns: [{
-    endpoint: 'https://your-s3-endpoint.com',
-    region: 'us-east-1',
-    accessKey: 'YOUR_ACCESS_KEY',
-    secretKey: 'YOUR_SECRET_KEY',
-    jsonBucket: 'your-chronos-json',
-    contentBucket: 'your-chronos-content',
-    backupsBucket: 'your-chronos-backups',
-    forcePathStyle: false
-  }],
-  
-  counters: {
-    mongoUri: 'mongodb://counters-db:27017',
-    dbName: 'chronos_counters'
-  },
-  
-  routing: { 
-    hashAlgo: 'rendezvous',
-    chooseKey: 'tenantId|dbName|collection'
-  },
-  
-  collectionMaps: {
-    users: {
-      indexedProps: ['email', 'status', 'role', 'createdAt'],
-      validation: {
-        requiredIndexed: ['email']
-      }
-    },
-    posts: {
-      indexedProps: ['title', 'status', 'authorId', 'createdAt', 'tags'],
-      validation: {
-        requiredIndexed: ['title', 'authorId']
-      }
-    }
-  }
-  
-  // ✅ Still no retention/rollup required - defaults to disabled!
-});
-```
-
----
-
-## 🎛️ Optional Configuration Features
-
-### Enable Retention Policies (Optional)
-
-```typescript
-const chronos = initChronos({
-  // ... basic config ...
-  
-  // Optional: Enable retention policies
-  retention: {
-    enabled: true,
-    ver: {
-      enabled: true,
-      maxAge: 90,        // Keep versions for 90 days
-      maxVersions: 10    // Keep last 10 versions per item
-    },
-    counters: {
-      enabled: true,
-      maxAge: 365,       // Keep counters for 1 year
-      maxVersions: 50    // Keep last 50 counter snapshots
-    }
-  }
-});
-```
-
-### Enable Rollup with Auto-Schedule (Optional)
-
-```typescript
-const chronos = initChronos({
-  // ... basic config ...
-  
-  // Optional: Enable rollup with automatic period management
-  rollup: {
-    enabled: true,
-    autoSchedule: true   // System handles daily/weekly/monthly automatically
-  }
-});
-```
-
-### Custom Rollup Configuration (Optional)
-
-```typescript
-const chronos = initChronos({
-  // ... basic config ...
-  
-  rollup: {
-    enabled: true,
-    manifestPeriod: 'weekly',  // Create weekly manifests
-    autoSchedule: false        // Manual control
-  }
-});
-```
-
----
-
-## 📊 Basic Usage Examples
-
-### CRUD Operations
-
-```typescript
-// Get operations for a specific collection
-const usersOps = chronos.with({
-  dbName: 'myapp',
-  collection: 'users',
-  tenantId: 'tenant-1'
-});
-
-// Create a new user
-const newUser = await usersOps.create({
-  email: 'user@example.com',
-  name: 'John Doe',
-  status: 'active',
-  createdAt: new Date()
-}, 'system', 'User registration');
-
-console.log('Created user:', newUser.id);
-
-// Read the user
-const user = await usersOps.getLatest(newUser.id);
-console.log('Retrieved user:', user);
-
-// Update the user
-await usersOps.update(newUser.id, {
-  status: 'verified',
-  updatedAt: new Date()
-}, newUser.ov, 'system', 'Email verification');
-
-// Query users
-const activeUsers = await usersOps.query({
-  filter: { status: 'active' },
-  limit: 10,
-  sort: { createdAt: -1 }
-});
-```
-
-### Analytics and Counters
-
-```typescript
-// Get analytics operations
-const analyticsOps = chronos.with({
-  dbName: 'myapp',
-  collection: 'analytics',
-  tenantId: 'tenant-1'
-});
-
-// Track events
-await analyticsOps.create({
-  eventType: 'page_view',
-  userId: 'user123',
-  page: '/dashboard',
-  timestamp: new Date(),
-  metadata: {
-    source: 'web',
-    sessionId: 'session789'
-  }
-}, 'tracker', 'User engagement tracking');
-
-// Get analytics totals
-const totals = await chronos.counters.getTotals({
-  dbName: 'myapp',
-  collection: 'analytics'
-});
-console.log('Analytics totals:', totals);
-```
-
----
-
-## 🔄 Migration from Previous Versions
-
-### Updated Configuration Structure
-
-The configuration structure has been simplified. Update your existing configuration:
-
-```typescript
-// ❌ Old structure (no longer supported)
-const chronos = initChronos({
-  mongoUris: ['mongodb://localhost:27017'],
-  databaseTypes: { /* ... */ }
-});
-
-// ✅ New structure (required)
-const chronos = initChronos({
-  databases: {
-    runtime: {
-      generic: {
-        key: 'runtime-generic',
-        mongoUri: 'mongodb://localhost:27017',
-        dbName: 'runtime_generic'
-      }
-    }
-  },
-  localStorage: { enabled: true, basePath: './data' },
-  counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'counters' },
-  routing: { hashAlgo: 'rendezvous' },
-  
-  // Legacy retention config still works
-  retention: {
-    ver: { days: 90, maxPerItem: 10 },
-    counters: { days: 365, weeks: 12, months: 6 }
-  },
-  
-  // Legacy rollup config still works
-  rollup: {
-    enabled: true,
-    manifestPeriod: 'daily'
-  },
-  
+  // Optional: Collection maps
   collectionMaps: {
     users: { indexedProps: ['email'] }
   }
 });
 ```
 
-### Recommended Migration Steps
+### Production Configuration (S3 + MongoDB)
 
-1. **Update Package**: `npm install chronos-db@latest`
-2. **Test Existing Config**: Verify your current configuration still works
-3. **Simplify if Desired**: Remove retention/rollup if not needed
-4. **Test Application**: Verify startup and operations work
-5. **Gradually Enable Features**: Add retention/rollup as needed
+```typescript
+import { initChronos } from 'chronos-db';
+
+const chronos = initChronos({
+  // MongoDB connections
+  mongoConns: [{
+    key: 'mongo-prod',
+    mongoUri: 'mongodb+srv://user:pass@cluster.mongodb.net'
+  }],
+  
+  // Database configuration
+  databases: {
+    runtime: [{
+      key: 'runtime-prod',
+      mongoConnKey: 'mongo-prod',
+      spacesConnKey: 'aws-prod',
+      dbName: 'runtime_prod'
+    }],
+    logs: {
+      connection: {
+        key: 'logs-prod',
+        mongoConnKey: 'mongo-prod',
+        spacesConnKey: 'aws-prod',
+        dbName: 'logs_prod'
+      }
+    }
+  },
+  
+  // S3-compatible storage
+  spacesConns: [{
+    key: 'aws-prod',
+    endpoint: 'https://s3.us-east-1.amazonaws.com',
+    region: 'us-east-1',
+    accessKey: process.env.AWS_ACCESS_KEY,
+    secretKey: process.env.AWS_SECRET_KEY,
+    buckets: {
+      json: 'chronos-json-prod',
+      content: 'chronos-content-prod',
+      versions: 'chronos-versions-prod',
+      backup: 'chronos-backups-prod'
+    }
+  }],
+  
+  // Counters
+  counters: {
+    mongoUri: 'mongodb+srv://user:pass@cluster.mongodb.net',
+    dbName: 'chronos_counters'
+  },
+  
+  // Collection maps
+  collectionMaps: {
+    users: { 
+      indexedProps: ['email', 'status'],
+      validation: { requiredIndexed: ['email'] }
+    }
+  },
+  
+  // Fallback queue
+  fallback: {
+    enabled: true,
+    maxRetries: 3
+  },
+  
+  // Transactions
+  transactions: {
+    enabled: true,
+    autoDetect: true
+  }
+});
+```
+
+### Multi-Tenant Configuration
+
+```typescript
+import { initChronos } from 'chronos-db';
+
+const chronos = initChronos({
+  // MongoDB connections
+  mongoConns: [
+    { key: 'mongo-cluster-a', mongoUri: 'mongodb+srv://user:pass@cluster-a.mongodb.net' },
+    { key: 'mongo-cluster-b', mongoUri: 'mongodb+srv://user:pass@cluster-b.mongodb.net' }
+  ],
+  
+  // Database configuration
+  databases: {
+    metadata: [
+      { key: 'meta-domain1', mongoConnKey: 'mongo-cluster-a', spacesConnKey: 'aws-us-east', tenantId: 'domain1', dbName: 'metadata_domain1' },
+      { key: 'meta-tenant-a', mongoConnKey: 'mongo-cluster-b', spacesConnKey: 'aws-us-east', tenantId: 'tenant-a', dbName: 'metadata_tenant_a' }
+    ],
+    runtime: [
+      { key: 'runtime-domain1', mongoConnKey: 'mongo-cluster-a', spacesConnKey: 'aws-us-east', tenantId: 'domain1', dbName: 'runtime_domain1' },
+      { key: 'runtime-tenant-a', mongoConnKey: 'mongo-cluster-b', spacesConnKey: 'aws-us-east', tenantId: 'tenant-a', dbName: 'runtime_tenant_a' }
+    ],
+    logs: {
+      connection: { key: 'logs-main', mongoConnKey: 'mongo-cluster-a', spacesConnKey: 'aws-us-east', dbName: 'chronos_logs' }
+    }
+  },
+  
+  // S3-compatible storage
+  spacesConns: [{
+    key: 'aws-us-east',
+    endpoint: 'https://s3.us-east-1.amazonaws.com',
+    region: 'us-east-1',
+    accessKey: process.env.AWS_ACCESS_KEY,
+    secretKey: process.env.AWS_SECRET_KEY,
+    buckets: {
+      json: 'chronos-json-us-east',
+      content: 'chronos-content-us-east',
+      versions: 'chronos-versions-us-east',
+      backup: 'chronos-backups-us-east'
+    }
+  }],
+  
+  // Counters
+  counters: {
+    mongoUri: 'mongodb+srv://user:pass@cluster-metrics.mongodb.net',
+    dbName: 'chronos_counters'
+  }
+});
+```
 
 ---
 
-## 🛠️ Configuration Reference
+## 🎯 Basic Usage
+
+### 1. Get Operations Context
+
+```typescript
+// Option A: Direct key usage (simplest)
+const ops = chronos.with({
+  key: 'runtime-local',  // Direct lookup, no resolution needed
+  collection: 'users'
+});
+
+// Option B: Tenant-based routing
+const ops2 = chronos.with({
+  databaseType: 'runtime',
+  tenantId: 'tenant-a',     // Maps to tenant-specific database
+  collection: 'users'
+});
+
+// Option C: Logs database (no tiers)
+const ops3 = chronos.with({
+  key: 'logs-main',         // Direct key for logs database
+  collection: 'audit'
+});
+```
+
+### 2. CRUD Operations
+
+```typescript
+// Create
+const user = await ops.create({
+  email: 'user@example.com',
+  name: 'John Doe',
+  status: 'active'
+}, 'system', 'user registration');
+
+console.log('Created user:', user);
+// Output: { id: '...', ov: 0, cv: 0, createdAt: '...' }
+
+// Update
+const updated = await ops.update(user.id, {
+  status: 'verified'
+}, user.ov, 'system', 'email verification');
+
+console.log('Updated user:', updated);
+// Output: { id: '...', ov: 1, cv: 1, updatedAt: '...' }
+
+// Read latest
+const latest = await ops.getLatest(user.id);
+console.log('Latest user:', latest);
+
+// Read specific version
+const version0 = await ops.getVersion(user.id, { ov: 0 });
+console.log('Original user:', version0);
+
+// Delete (logical)
+const deleted = await ops.delete(user.id, updated.ov, 'system', 'user deletion');
+console.log('Deleted user:', deleted);
+```
+
+### 3. Enrichment API
+
+```typescript
+// Incremental updates without full rewrite
+await ops.enrich(user.id, {
+  tags: ['premium'],
+  metadata: { score: 100 }
+}, {
+  functionId: 'enricher@v1',
+  actor: 'system',
+  reason: 'automated enrichment'
+});
+
+// Batch enrichment
+await ops.enrich(user.id, [
+  { tags: ['vip'] },
+  { metadata: { score: 200 } },
+  { tags: ['verified'] }
+]);
+```
+
+---
+
+## 🔧 Configuration Options
 
 ### Required Fields
 
-```typescript
-interface MinimalConfig {
-  databases: {
-    metadata?: DatabaseTypeConfig;
-    knowledge?: DatabaseTypeConfig;
-    runtime?: DatabaseTypeConfig;
-  };                                          // Database configuration
-  localStorage?: LocalStorageConfig;         // OR spacesConns
-  counters: CountersConfig;                   // Counters database
-  routing: RoutingConfig;                     // Routing configuration
-  collectionMaps: Record<string, CollectionMap>; // Collection definitions
-}
-```
+- **`mongoConns`**: Array of MongoDB connection configurations
+- **`databases`**: Database configuration with at least one database type
+- **`counters`**: Counters database configuration
 
 ### Optional Fields
 
-```typescript
-interface OptionalConfig {
-  spacesConns?: SpacesConnConfig[];       // S3 storage (production)
-  retention?: RetentionConfig;            // Optional: retention policies
-  rollup?: RollupConfig;                  // Optional: rollup policies
-  counterRules?: CountersRulesConfig;     // Optional: conditional counters
-  devShadow?: DevShadowConfig;            // Optional: dev shadows
-  hardDeleteEnabled?: boolean;            // Optional: hard delete
-  fallback?: FallbackConfig;              // Optional: fallback queues
-  writeOptimization?: WriteOptimizationConfig; // Optional: write optimization
+- **`spacesConns`**: S3-compatible storage (if not using localStorage)
+- **`localStorage`**: Local filesystem storage (for development)
+- **`routing`**: Routing configuration
+- **`retention`**: Data retention policies
+- **`rollup`**: Data rollup configuration
+- **`collectionMaps`**: Collection mapping and validation
+- **`devShadow`**: Development shadow storage
+- **`fallback`**: Fallback queue configuration
+- **`transactions`**: Transaction configuration
+
+### Key-Based Mapping
+
+- **`key`**: Globally unique identifier for direct routing
+- **`mongoConnKey`**: References a MongoDB connection from the `mongoConns` array
+- **`spacesConnKey`**: References an S3 connection from the `spacesConns` array
+- **`tenantId`**: External identifier for tenant mapping
+
+---
+
+## 🏗️ Architecture Benefits
+
+### Key-Based Connection Mapping
+
+The new configuration uses a **key-based mapping system** that provides several benefits:
+
+- **Reusability**: One MongoDB connection can serve multiple databases
+- **Flexibility**: One S3 connection can serve multiple database types
+- **Clarity**: Explicit relationships between components
+- **Maintainability**: Easy to update connection details in one place
+
+### Database Types
+
+- **`metadata`** - System configuration, user settings, application metadata
+- **`knowledge`** - Content, documents, knowledge base, static data
+- **`runtime`** - User data, transactions, dynamic application data
+- **`logs`** - System logs and audit trails (no tiers, simple structure)
+
+---
+
+## 🚨 Migration from Previous Versions
+
+If you're upgrading from a previous version of chronos-db:
+
+1. **Remove `mongoUris` array**: Replace with `mongoConns` array
+2. **Add `key` fields**: Each connection needs a unique key
+3. **Update database structure**: Use direct arrays instead of nested objects
+4. **Add `spacesConnKey`**: Link databases to S3 connections
+5. **Update bucket structure**: Use `buckets` object instead of individual fields
+
+### Example Migration
+
+**Before (v1.4.x):**
+```json
+{
+  "mongoUris": ["mongodb://localhost:27017"],
+  "spacesConns": [{
+    "endpoint": "http://localhost:9000",
+    "jsonBucket": "chronos-json",
+    "contentBucket": "chronos-content"
+  }]
+}
+```
+
+**After (v1.5.x):**
+```json
+{
+  "mongoConns": [{
+    "key": "mongo-local",
+    "mongoUri": "mongodb://localhost:27017"
+  }],
+  "databases": {
+    "runtime": [{
+      "key": "runtime-local",
+      "mongoConnKey": "mongo-local",
+      "spacesConnKey": "minio-local",
+      "dbName": "runtime_local"
+    }]
+  },
+  "spacesConns": [{
+    "key": "minio-local",
+    "endpoint": "http://localhost:9000",
+    "buckets": {
+      "json": "chronos-json",
+      "content": "chronos-content",
+      "versions": "chronos-versions"
+    }
+  }]
 }
 ```
 
 ---
 
-## 🚨 Troubleshooting
+## 📚 Next Steps
 
-### Common Issues and Solutions
-
-#### 1. "require is not defined" Error
-
-**Problem**: ESM/CJS compatibility issue  
-**Solution**: Update to chronos-db@1.1.0+ (already fixed)
-
-```bash
-npm install chronos-db@latest
-```
-
-#### 2. Configuration Validation Errors
-
-**Problem**: Missing required retention/rollup config  
-**Solution**: Use minimal configuration (no retention/rollup needed)
-
-```typescript
-// ✅ This works now
-const config = {
-  databases: {
-    runtime: {
-      generic: {
-        key: 'runtime-generic',
-        mongoUri: 'mongodb://localhost:27017',
-        dbName: 'runtime_generic'
-      }
-    }
-  },
-  localStorage: { enabled: true, basePath: './data' },
-  counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'counters' },
-  routing: { hashAlgo: 'rendezvous' },
-  collectionMaps: { users: { indexedProps: ['email'] } }
-  // No retention/rollup required!
-};
-```
-
-#### 3. Application Startup Failures
-
-**Problem**: Chronos DB initialization fails  
-**Solution**: Check MongoDB connection and collection maps
-
-```typescript
-try {
-  const chronos = initUnifiedDataManager(config);
-  console.log('✅ Chronos DB initialized successfully');
-} catch (error) {
-  console.error('❌ Chronos DB initialization failed:', error.message);
-  // Check your configuration and MongoDB connection
-}
-```
+1. **Read the [Configuration Guide](CONFIGURATION.md)** for detailed configuration options
+2. **Check the [API Documentation](API.md)** for complete API reference
+3. **See [Examples](../examples/)** for real-world configuration examples
+4. **Review [Architecture](ARCHITECTURE.md)** for understanding the system design
 
 ---
 
-## 📈 Performance Considerations
+## 🆘 Troubleshooting
 
-### For Development
+### Common Issues
 
-```typescript
-// Minimal configuration for development
-const devConfig = {
-  databases: {
-    runtime: {
-      generic: {
-        key: 'runtime-generic',
-        mongoUri: 'mongodb://localhost:27017',
-        dbName: 'runtime_generic'
-      }
-    }
-  },
-  localStorage: { enabled: true, basePath: './dev-data' },
-  counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'dev_counters' },
-  routing: { hashAlgo: 'rendezvous' },
-  collectionMaps: {
-    // Define only essential collections
-    users: { indexedProps: ['email'] },
-    posts: { indexedProps: ['title', 'status'] }
-  }
-  // Retention/rollup disabled by default - no performance impact
-};
-```
+1. **"S3 connection not found"**: Check that `spacesConnKey` matches a `key` in `spacesConns`
+2. **"MongoDB connection not found"**: Check that `mongoConnKey` matches a `key` in `mongoConns`
+3. **"Bucket does not exist"**: Ensure buckets are created in your S3-compatible storage
+4. **"Access denied"**: Verify S3 credentials and permissions
+5. **"Invalid endpoint"**: Check endpoint URL format for your S3 provider
 
-### For Production
+### Getting Help
 
-```typescript
-// Production configuration with optimizations
-const prodConfig = {
-  databases: {
-    runtime: {
-      generic: {
-        key: 'runtime-generic',
-        mongoUri: 'mongodb://cluster:27017',
-        dbName: 'runtime_generic'
-      }
-    }
-  },
-  spacesConns: [{ /* S3 config */ }],
-  counters: { mongoUri: 'mongodb://counters:27017', dbName: 'prod_counters' },
-  routing: { hashAlgo: 'rendezvous', chooseKey: 'tenantId|dbName' },
-  collectionMaps: { /* all collections */ },
-  
-  // Optional: Enable optimizations
-  writeOptimization: {
-    batchS3: true,
-    batchWindowMs: 100,
-    debounceCountersMs: 1000,
-    allowShadowSkip: true
-  },
-  
-  // Optional: Enable fallback queues for reliability
-  fallback: {
-    enabled: true,
-    maxAttempts: 10,
-    baseDelayMs: 2000,
-    maxDelayMs: 60000,
-    deadLetterCollection: 'chronos_dead_letter'
-  }
-};
-```
-
----
-
-## 📚 Additional Resources
-
-### Documentation Links
-
-- [Chronos-DB GitHub Repository](https://github.com/nx-intelligence/chronos-db)
-- [API Reference](./API.md)
-- [Configuration Guide](./CONFIGURATION.md)
-- [Architecture Overview](./ARCHITECTURE.md)
-
-### Support
-
-- **Issues**: [GitHub Issues](https://github.com/nx-intelligence/chronos-db/issues)
-- **Documentation**: [docs/](./docs/)
-- **Examples**: [examples/](./examples/)
-
----
-
-## 🎉 Summary
-
-The enhanced chronos-db@1.1.0+ package now provides:
-
-- ✅ **Simple Setup**: Minimal configuration without retention/rollup requirements
-- ✅ **Flexible Control**: Optional features with sensible defaults
-- ✅ **Backward Compatible**: Existing configurations continue to work
-- ✅ **Production Ready**: Full feature set available when needed
-- ✅ **ESM/CJS Fixed**: No more "require is not defined" errors
-
-**Quick Start:**
-1. Install: `npm install chronos-db@latest`
-2. Use minimal configuration
-3. Add optional features as needed
-
-The configuration validation issues are now completely resolved! 🚀
+- Check the main [README.md](../README.md) for detailed configuration options
+- Review the [API documentation](API.md) for usage examples
+- See [examples/](../examples/) for complete configuration examples

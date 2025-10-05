@@ -502,6 +502,7 @@ export function initChronos(config: ChronosConfig): Chronos {
   // Initialize router
   logger.debug('Initializing BridgeRouter');
   const router = new BridgeRouter({
+    mongoConns: config.mongoConns,
     databases: config.databases,
     ...(config.spacesConns && { spacesConns: config.spacesConns }),
     ...(config.localStorage && { localStorage: config.localStorage }),
@@ -530,12 +531,18 @@ export function initChronos(config: ChronosConfig): Chronos {
 
   // Get first available MongoDB URI for fallback
   let fallbackMongoUri: string | undefined;
-  if (config.databases.metadata?.generic) {
-    fallbackMongoUri = config.databases.metadata.generic.mongoUri;
-  } else if (config.databases.knowledge?.generic) {
-    fallbackMongoUri = config.databases.knowledge.generic.mongoUri;
-  } else if (config.databases.runtime?.generic) {
-    fallbackMongoUri = config.databases.runtime.generic.mongoUri;
+  if (config.databases.metadata?.[0]) {
+    const mongoConn = config.mongoConns.find(conn => conn.key === config.databases.metadata?.[0]?.mongoConnKey);
+    if (mongoConn) fallbackMongoUri = mongoConn.mongoUri;
+  } else if (config.databases.knowledge?.[0]) {
+    const mongoConn = config.mongoConns.find(conn => conn.key === config.databases.knowledge?.[0]?.mongoConnKey);
+    if (mongoConn) fallbackMongoUri = mongoConn.mongoUri;
+  } else if (config.databases.runtime?.[0]) {
+    const mongoConn = config.mongoConns.find(conn => conn.key === config.databases.runtime?.[0]?.mongoConnKey);
+    if (mongoConn) fallbackMongoUri = mongoConn.mongoUri;
+  } else if (config.databases.logs?.connection) {
+    const mongoConn = config.mongoConns.find(conn => conn.key === config.databases.logs?.connection?.mongoConnKey);
+    if (mongoConn) fallbackMongoUri = mongoConn.mongoUri;
   }
 
   if (config.fallback?.enabled && fallbackMongoUri) {

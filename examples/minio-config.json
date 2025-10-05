@@ -1,22 +1,42 @@
 {
+  "mongoConns": [
+    {
+      "key": "mongo-local",
+      "mongoUri": "mongodb://localhost:27017"
+    }
+  ],
   "databases": {
-    "runtime": {
-      "generic": {
-        "key": "runtime-generic",
-        "mongoUri": "mongodb://localhost:27017/runtime",
-        "dbName": "runtime_generic"
+    "runtime": [
+      {
+        "key": "runtime-local",
+        "mongoConnKey": "mongo-local",
+        "tenantId": "local",
+        "spacesConnKey": "minio-local",
+        "dbName": "runtime_local"
+      }
+    ],
+    "logs": {
+      "connection": {
+        "key": "logs-local",
+        "mongoConnKey": "mongo-local",
+        "spacesConnKey": "minio-local",
+        "dbName": "chronos_logs"
       }
     }
   },
   "spacesConns": [
     {
+      "key": "minio-local",
       "endpoint": "http://localhost:9000",
       "region": "us-east-1",
       "accessKey": "minioadmin",
       "secretKey": "minioadmin",
-      "backupsBucket": "chronos-backups",
-      "jsonBucket": "chronos-json",
-      "contentBucket": "chronos-content",
+      "buckets": {
+        "json": "chronos-json",
+        "content": "chronos-content",
+        "versions": "chronos-versions",
+        "backup": "chronos-backups"
+      },
       "forcePathStyle": true
     }
   ],

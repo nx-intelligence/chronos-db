@@ -3,7 +3,7 @@ import type { MongoClientOptions } from 'mongodb';
 import { S3Client } from '@aws-sdk/client-s3';
 import type { S3ClientConfig } from '@aws-sdk/client-s3';
 import { pickIndexHRW, generateRoutingKeyFromDSL } from './hash.js';
-import type { SpacesConnConfig, LocalStorageConfig, DatabaseTypeConfig, DatabaseConnection } from '../config.js';
+import type { SpacesConnConfig, LocalStorageConfig, DatabaseConnection, LogsDatabaseConfig, MongoConnConfig } from '../config.js';
 import { LocalStorageAdapter } from '../storage/localStorage.js';
 import { S3StorageAdapter } from '../storage/s3Adapter.js';
 import type { StorageAdapter } from '../storage/interface.js';
@@ -17,14 +17,13 @@ export interface RouteContext {
   dbName: string;
   collection: string;
   objectId?: string;
-  tenantId?: string;
   forcedIndex?: number; // admin override for migrations/debug
   
   // Enhanced multi-tenant routing
   key?: string; // Direct key for enhanced routing
-  databaseType?: 'metadata' | 'knowledge' | 'runtime';
-  tier?: 'generic' | 'domain' | 'tenant';
-  extIdentifier?: string; // External identifier for mapping
+  databaseType?: 'metadata' | 'knowledge' | 'runtime' | 'logs';
+  tier?: 'domain' | 'tenant';
+  tenantId?: string; // Tenant ID for mapping
 }
 
 export interface RouterInitArgs {
@@ -32,12 +31,15 @@ export interface RouterInitArgs {
   localStorage?: LocalStorageConfig | undefined; // optional filesystem storage for dev/test
   hashAlgo?: 'rendezvous' | 'jump'; // default "rendezvous"
   chooseKey?: string | ((ctx: RouteContext) => string); // default: tenantId ?? dbName ?? collection+":"+objectId
-  
+
+  // MongoDB connections - define once, reference by key
+  mongoConns: MongoConnConfig[];
   // Database configuration
   databases: {
-    metadata?: DatabaseTypeConfig;
-    knowledge?: DatabaseTypeConfig;
-    runtime?: DatabaseTypeConfig;
+    metadata?: DatabaseConnection[];
+    knowledge?: DatabaseConnection[];
+    runtime?: DatabaseConnection[];
+    logs?: LogsDatabaseConfig;
   };
 }
 
@@ -46,9 +48,11 @@ export interface BackendInfo {
   mongoUri: string;
   endpoint: string;
   region: string;
-  jsonBucket: string;
-  contentBucket: string;
-  backupsBucket: string;
+  buckets: {
+    json: string;
+    content: string;
+    backup?: string;
+  };
 }
 
 // ============================================================================
@@ -56,15 +60,17 @@ export interface BackendInfo {
 // ============================================================================
 
 export class BridgeRouter {
+  private readonly mongoConns: MongoConnConfig[];
   private readonly spacesConns: SpacesConnConfig[] | undefined;
   private readonly localStorage: LocalStorageAdapter | null;
   private readonly hashAlgo: 'rendezvous' | 'jump';
   private readonly chooseKey: string | ((ctx: RouteContext) => string);
   private readonly backendIds: string[];
   private readonly databases: {
-    metadata?: DatabaseTypeConfig;
-    knowledge?: DatabaseTypeConfig;
-    runtime?: DatabaseTypeConfig;
+    metadata?: DatabaseConnection[];
+    knowledge?: DatabaseConnection[];
+    runtime?: DatabaseConnection[];
+    logs?: LogsDatabaseConfig;
   };
   
   // Connection pools (lazy initialization)
@@ -76,6 +82,7 @@ export class BridgeRouter {
 
   constructor(args: RouterInitArgs) {
     logger.debug('Initializing BridgeRouter', {
+      mongoConnsCount: args.mongoConns.length,
       databasesCount: Object.keys(args.databases).length,
       spacesConnsCount: args.spacesConns?.length || 0,
       localStorageEnabled: args.localStorage?.enabled,
@@ -85,6 +92,7 @@ export class BridgeRouter {
     
     this.validateArgs(args);
     
+    this.mongoConns = [...args.mongoConns];
     this.spacesConns = args.spacesConns ? [...args.spacesConns] : undefined;
     this.localStorage = args.localStorage?.enabled 
       ? new LocalStorageAdapter(args.localStorage.basePath) 
@@ -159,6 +167,15 @@ export class BridgeRouter {
   }
 
   /**
+   * Find MongoDB connection by key
+   * @param key - MongoDB connection key to search for
+   * @returns MongoDB connection config or null
+   */
+  private findMongoConnByKey(key: string): MongoConnConfig | null {
+    return this.mongoConns.find(conn => conn.key === key) || null;
+  }
+
+  /**
    * Get all MongoDB URIs from database connections
    */
   private getAllMongoUris(): string[] {
@@ -166,21 +183,29 @@ export class BridgeRouter {
     
     // Collect all MongoDB URIs from all database types
     if (this.databases.metadata) {
-      if (this.databases.metadata.generic) uris.push(this.databases.metadata.generic.mongoUri);
-      if (this.databases.metadata.domains) uris.push(...this.databases.metadata.domains.map(d => d.mongoUri));
-      if (this.databases.metadata.tenants) uris.push(...this.databases.metadata.tenants.map(t => t.mongoUri));
+      for (const conn of this.databases.metadata) {
+        const mongoConn = this.findMongoConnByKey(conn.mongoConnKey);
+        if (mongoConn) uris.push(mongoConn.mongoUri);
+      }
     }
     
     if (this.databases.knowledge) {
-      if (this.databases.knowledge.generic) uris.push(this.databases.knowledge.generic.mongoUri);
-      if (this.databases.knowledge.domains) uris.push(...this.databases.knowledge.domains.map(d => d.mongoUri));
-      if (this.databases.knowledge.tenants) uris.push(...this.databases.knowledge.tenants.map(t => t.mongoUri));
+      for (const conn of this.databases.knowledge) {
+        const mongoConn = this.findMongoConnByKey(conn.mongoConnKey);
+        if (mongoConn) uris.push(mongoConn.mongoUri);
+      }
     }
     
     if (this.databases.runtime) {
-      if (this.databases.runtime.generic) uris.push(this.databases.runtime.generic.mongoUri);
-      if (this.databases.runtime.domains) uris.push(...this.databases.runtime.domains.map(d => d.mongoUri));
-      if (this.databases.runtime.tenants) uris.push(...this.databases.runtime.tenants.map(t => t.mongoUri));
+      for (const conn of this.databases.runtime) {
+        const mongoConn = this.findMongoConnByKey(conn.mongoConnKey);
+        if (mongoConn) uris.push(mongoConn.mongoUri);
+      }
+    }
+    
+    if (this.databases.logs) {
+      const mongoConn = this.findMongoConnByKey(this.databases.logs.connection.mongoConnKey);
+      if (mongoConn) uris.push(mongoConn.mongoUri);
     }
     
     return uris;
@@ -194,35 +219,48 @@ export class BridgeRouter {
     const allConnections: DatabaseConnection[] = [];
     
     if (this.databases.metadata) {
-      if (this.databases.metadata.generic) allConnections.push(this.databases.metadata.generic);
-      if (this.databases.metadata.domains) allConnections.push(...this.databases.metadata.domains);
-      if (this.databases.metadata.tenants) allConnections.push(...this.databases.metadata.tenants);
+      allConnections.push(...this.databases.metadata);
     }
     
     if (this.databases.knowledge) {
-      if (this.databases.knowledge.generic) allConnections.push(this.databases.knowledge.generic);
-      if (this.databases.knowledge.domains) allConnections.push(...this.databases.knowledge.domains);
-      if (this.databases.knowledge.tenants) allConnections.push(...this.databases.knowledge.tenants);
+      allConnections.push(...this.databases.knowledge);
     }
     
     if (this.databases.runtime) {
-      if (this.databases.runtime.generic) allConnections.push(this.databases.runtime.generic);
-      if (this.databases.runtime.domains) allConnections.push(...this.databases.runtime.domains);
-      if (this.databases.runtime.tenants) allConnections.push(...this.databases.runtime.tenants);
+      allConnections.push(...this.databases.runtime);
     }
     
-    return allConnections.map((conn, index) => {
+    if (this.databases.logs) {
+      allConnections.push(this.databases.logs.connection);
+    }
+    
+    return allConnections.map((conn) => {
+      const mongoConn = this.findMongoConnByKey(conn.mongoConnKey);
+      if (!mongoConn) {
+        throw new Error(`MongoDB connection not found for key: ${conn.mongoConnKey}`);
+      }
+      
       if (this.localStorage) {
         // For local storage, just use the MongoDB URI
-        return `${conn.mongoUri}|localhost|local`;
+        return `${mongoConn.mongoUri}|localhost|local`;
       }
       
-      if (!this.spacesConns || !this.spacesConns[index]) {
-        throw new Error(`Backend index ${index} is not available`);
+      // Find the S3 connection for this database connection
+      let spacesConn: SpacesConnConfig | null = null;
+      if (conn.spacesConnKey) {
+        spacesConn = this.findSpacesConnByKey(conn.spacesConnKey);
       }
       
-      const spacesConn = this.spacesConns[index];
-      return `${conn.mongoUri}|${spacesConn.endpoint}|${spacesConn.jsonBucket}`;
+      if (!spacesConn && this.spacesConns && this.spacesConns.length > 0) {
+        // Fall back to first available S3 connection
+        spacesConn = this.spacesConns[0] || null;
+      }
+      
+      if (!spacesConn) {
+        throw new Error(`S3 connection not found for database connection: ${conn.key}`);
+      }
+      
+      return `${mongoConn.mongoUri}|${spacesConn.endpoint}|${spacesConn.buckets.json}`;
     });
   }
 
@@ -248,37 +286,38 @@ export class BridgeRouter {
       return this.findConnectionByKey(ctx.key);
     }
 
-    // Resolve by databaseType/tier/extIdentifier
+    // Resolve by databaseType/tier/tenantId
     if (ctx.databaseType && ctx.tier) {
       const dbType = this.databases[ctx.databaseType];
       if (!dbType) {
         return null;
       }
 
-      if (ctx.tier === 'generic' && dbType.generic) {
-        return {
-          mongoUri: dbType.generic.mongoUri,
-          dbName: dbType.generic.dbName
-        };
-      }
-
-      if (ctx.tier === 'domain' && ctx.extIdentifier && dbType.domains) {
-        const domain = dbType.domains.find(d => d.extIdentifier === ctx.extIdentifier);
-        if (domain) {
+      // Handle logs database type (no tiers)
+      if (ctx.databaseType === 'logs' && 'connection' in dbType) {
+        const logsDb = dbType as LogsDatabaseConfig;
+        const mongoConn = this.findMongoConnByKey(logsDb.connection.mongoConnKey);
+        if (mongoConn) {
           return {
-            mongoUri: domain.mongoUri,
-            dbName: domain.dbName
+            mongoUri: mongoConn.mongoUri,
+            dbName: logsDb.connection.dbName
           };
         }
       }
 
-      if (ctx.tier === 'tenant' && ctx.extIdentifier && dbType.tenants) {
-        const tenant = dbType.tenants.find(t => t.extIdentifier === ctx.extIdentifier);
+      // Handle other database types (arrays of connections)
+      const connections = dbType as DatabaseConnection[];
+      
+      if (ctx.tier === 'tenant' && ctx.tenantId) {
+        const tenant = connections.find((conn: DatabaseConnection) => conn.tenantId === ctx.tenantId);
         if (tenant) {
-          return {
-            mongoUri: tenant.mongoUri,
-            dbName: tenant.dbName
-          };
+          const mongoConn = this.findMongoConnByKey(tenant.mongoConnKey);
+          if (mongoConn) {
+            return {
+              mongoUri: mongoConn.mongoUri,
+              dbName: tenant.dbName
+            };
+          }
         }
       }
     }
@@ -287,45 +326,53 @@ export class BridgeRouter {
   }
 
   /**
+   * Find S3 connection by key
+   * @param key - S3 connection key to search for
+   * @returns S3 connection config or null
+   */
+  private findSpacesConnByKey(key: string): SpacesConnConfig | null {
+    if (!this.spacesConns) return null;
+    return this.spacesConns.find(conn => conn.key === key) || null;
+  }
+
+  /**
    * Find database connection by key across all database types
    * @param key - Unique key to search for
-   * @returns Database connection info or null
+   * @returns Database connection info with resolved MongoDB URI or null
    */
   private findConnectionByKey(key: string): { mongoUri: string; dbName: string } | null {
-    for (const dbType of Object.values(this.databases)) {
+    for (const [dbTypeName, dbType] of Object.entries(this.databases)) {
       if (!dbType) continue;
       
-      // Check generic
-      if (dbType.generic && dbType.generic.key === key) {
-        return {
-          mongoUri: dbType.generic.mongoUri,
-          dbName: dbType.generic.dbName
-        };
-      }
-
-      // Check domains
-      if (dbType.domains) {
-        const domain = dbType.domains.find((d: DatabaseConnection) => d.key === key);
-        if (domain) {
-          return {
-            mongoUri: domain.mongoUri,
-            dbName: domain.dbName
-          };
+      // Handle logs database type (simple structure)
+      if (dbTypeName === 'logs' && 'connection' in dbType) {
+        const logsDb = dbType as LogsDatabaseConfig;
+        if (logsDb.connection && logsDb.connection.key === key) {
+          const mongoConn = this.findMongoConnByKey(logsDb.connection.mongoConnKey);
+          if (mongoConn) {
+            return {
+              mongoUri: mongoConn.mongoUri,
+              dbName: logsDb.connection.dbName
+            };
+          }
         }
+        continue;
       }
-
-      // Check tenants
-      if (dbType.tenants) {
-        const tenant = dbType.tenants.find((t: DatabaseConnection) => t.key === key);
-        if (tenant) {
+      
+      // Handle other database types (arrays of connections)
+      const connections = dbType as DatabaseConnection[];
+      const connection = connections.find((conn: DatabaseConnection) => conn.key === key);
+      if (connection) {
+        const mongoConn = this.findMongoConnByKey(connection.mongoConnKey);
+        if (mongoConn) {
           return {
-            mongoUri: tenant.mongoUri,
-            dbName: tenant.dbName
+            mongoUri: mongoConn.mongoUri,
+            dbName: connection.dbName
           };
         }
       }
     }
-
+    
     return null;
   }
 
@@ -481,7 +528,7 @@ export class BridgeRouter {
    * Get S3 connection configuration for a specific backend
    * Returns mock config for localStorage mode
    */
-  getSpaces(index: number): SpacesConnConfig | { jsonBucket: string; contentBucket: string; backupsBucket: string } {
+  getSpaces(index: number, connectionKey?: string): SpacesConnConfig | { buckets: { json: string; content: string; versions: string; backup?: string } } {
     if (this._isShutdown) {
       throw new Error('Router has been shutdown');
     }
@@ -489,12 +536,41 @@ export class BridgeRouter {
     // Return mock bucket names for localStorage mode
     if (this.localStorage) {
       return {
-        jsonBucket: 'json',
-        contentBucket: 'content',
-        backupsBucket: 'backups',
+        buckets: {
+          json: 'json',
+          content: 'content',
+          versions: 'versions',
+          backup: 'backups',
+        },
       };
     }
 
+    // If we have a connection key, try to find its specific S3 config
+    if (connectionKey) {
+      // Find the full DatabaseConnection object to access spacesConnKey
+      let fullConnection: DatabaseConnection | null = null;
+      for (const dbType of Object.values(this.databases)) {
+        if (!dbType) continue;
+        if ('connection' in dbType) { // LogsDatabaseConfig
+          if (dbType.connection.key === connectionKey) {
+            fullConnection = dbType.connection;
+            break;
+          }
+        } else { // DatabaseConnection[]
+          fullConnection = (dbType as DatabaseConnection[]).find(conn => conn.key === connectionKey) || null;
+          if (fullConnection) break;
+        }
+      }
+      
+      if (fullConnection && fullConnection.spacesConnKey) {
+        const spacesConn = this.findSpacesConnByKey(fullConnection.spacesConnKey);
+        if (spacesConn) {
+          return spacesConn;
+        }
+      }
+    }
+
+    // Fall back to global spacesConns
     if (!this.spacesConns) {
       throw new Error('S3 connections not configured');
     }
@@ -527,9 +603,11 @@ export class BridgeRouter {
           mongoUri,
           endpoint: 'localhost',
           region: 'local',
-          jsonBucket: 'json',
-          contentBucket: 'content',
-          backupsBucket: 'backups',
+          buckets: {
+            json: 'json',
+            content: 'content',
+            backup: 'backups',
+          },
         };
       }
 
@@ -543,9 +621,11 @@ export class BridgeRouter {
         mongoUri,
         endpoint: conn.endpoint,
         region: conn.region,
-        jsonBucket: conn.jsonBucket,
-        contentBucket: conn.contentBucket,
-        backupsBucket: conn.backupsBucket,
+        buckets: {
+          json: conn.buckets.json,
+          content: conn.buckets.content,
+          ...(conn.buckets.backup && { backup: conn.buckets.backup }),
+        },
       };
     });
   }

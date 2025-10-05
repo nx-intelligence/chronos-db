@@ -48,15 +48,30 @@ npm install chronos-db
 import { initChronos } from 'chronos-db';
 
 const chronos = initChronos({
-  mongoUris: ['mongodb://localhost:27017'],
+  mongoConns: [{
+    key: 'mongo-local',
+    mongoUri: 'mongodb://localhost:27017'
+  }],
+  databases: {
+    runtime: [{
+      key: 'runtime-local',
+      mongoConnKey: 'mongo-local',
+      spacesConnKey: 'do-spaces',
+      dbName: 'myapp'
+    }]
+  },
   spacesConns: [{
+    key: 'do-spaces',
     endpoint: 'https://nyc3.digitaloceanspaces.com',
     region: 'nyc3',
     accessKey: 'YOUR_ACCESS_KEY',
     secretKey: 'YOUR_SECRET_KEY',
-    backupsBucket: 'chronos-backups',
-    jsonBucket: 'chronos-json',
-    contentBucket: 'chronos-content',
+    buckets: {
+      json: 'chronos-json',
+      content: 'chronos-content',
+      versions: 'chronos-versions',
+      backup: 'chronos-backups'
+    }
   }],
   counters: {
     mongoUri: 'mongodb://localhost:27017',
@@ -113,7 +128,7 @@ await chronos.admin.shutdown();
 
 ---
 
-## 🏢 Enhanced Multi-Tenant Usage
+## 🏢 Multi-Tenant Usage
 
 For complex multi-tenant architectures with multiple database types and tiers:
 
@@ -121,53 +136,44 @@ For complex multi-tenant architectures with multiple database types and tiers:
 import { initChronos } from 'chronos-db';
 
 const chronos = initChronos({
-  mongoUris: [
-    'mongodb://meta-generic:27017',
-    'mongodb://meta-domain1:27017', 
-    'mongodb://meta-tenant-a:27017',
-    'mongodb://know-generic:27017',
-    'mongodb://know-domain1:27017',
-    'mongodb://know-tenant-a:27017',
-    'mongodb://runtime-generic:27017',
-    'mongodb://runtime-domain1:27017',
-    'mongodb://runtime-tenant-a:27017'
+  mongoConns: [
+    { key: 'mongo-cluster-a', mongoUri: 'mongodb+srv://user:pass@cluster-a.mongodb.net' },
+    { key: 'mongo-cluster-b', mongoUri: 'mongodb+srv://user:pass@cluster-b.mongodb.net' }
   ],
-  spacesConns: [/* your S3 config */],
-  counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'chronos_counters' },
+  databases: {
+    metadata: [
+      { key: 'meta-domain1', mongoConnKey: 'mongo-cluster-a', spacesConnKey: 'aws-us-east', tenantId: 'domain1', dbName: 'metadata_domain1' },
+      { key: 'meta-tenant-a', mongoConnKey: 'mongo-cluster-b', spacesConnKey: 'aws-us-east', tenantId: 'tenant-a', dbName: 'metadata_tenant_a' }
+    ],
+    knowledge: [
+      { key: 'know-domain1', mongoConnKey: 'mongo-cluster-a', spacesConnKey: 'aws-us-east', tenantId: 'domain1', dbName: 'knowledge_domain1' },
+      { key: 'know-tenant-a', mongoConnKey: 'mongo-cluster-b', spacesConnKey: 'aws-us-east', tenantId: 'tenant-a', dbName: 'knowledge_tenant_a' }
+    ],
+    runtime: [
+      { key: 'runtime-domain1', mongoConnKey: 'mongo-cluster-a', spacesConnKey: 'aws-us-east', tenantId: 'domain1', dbName: 'runtime_domain1' },
+      { key: 'runtime-tenant-a', mongoConnKey: 'mongo-cluster-b', spacesConnKey: 'aws-us-east', tenantId: 'tenant-a', dbName: 'runtime_tenant_a' }
+    ],
+    logs: {
+      connection: { key: 'logs-main', mongoConnKey: 'mongo-cluster-a', spacesConnKey: 'aws-us-east', dbName: 'chronos_logs' }
+    }
+  },
+  spacesConns: [{
+    key: 'aws-us-east',
+    endpoint: 'https://s3.us-east-1.amazonaws.com',
+    region: 'us-east-1',
+    accessKey: 'YOUR_AWS_ACCESS_KEY',
+    secretKey: 'YOUR_AWS_SECRET_KEY',
+    buckets: {
+      json: 'chronos-json-us-east',
+      content: 'chronos-content-us-east',
+      versions: 'chronos-versions-us-east',
+      backup: 'chronos-backups-us-east'
+    }
+  }],
+  counters: { mongoUri: 'mongodb+srv://user:pass@cluster-metrics.mongodb.net', dbName: 'chronos_counters' },
   routing: { hashAlgo: 'rendezvous' },
   retention: {},
   rollup: {},
-  
-  // Enhanced multi-tenant configuration
-  databaseTypes: {
-    metadata: {
-      generic: { key: 'meta-generic', mongoUri: 'mongodb://meta-generic:27017', dbName: 'meta_generic' },
-      domains: [
-        { key: 'meta-domain-1', extIdentifier: 'domain-1', mongoUri: 'mongodb://meta-domain1:27017', dbName: 'meta_domain_1' }
-      ],
-      tenants: [
-        { key: 'meta-tenant-a', extIdentifier: 'tenant-a', mongoUri: 'mongodb://meta-tenant-a:27017', dbName: 'meta_tenant_a' }
-      ]
-    },
-    knowledge: {
-      generic: { key: 'know-generic', mongoUri: 'mongodb://know-generic:27017', dbName: 'know_generic' },
-      domains: [
-        { key: 'know-domain-1', extIdentifier: 'domain-1', mongoUri: 'mongodb://know-domain1:27017', dbName: 'know_domain_1' }
-      ],
-      tenants: [
-        { key: 'know-tenant-a', extIdentifier: 'tenant-a', mongoUri: 'mongodb://know-tenant-a:27017', dbName: 'know_tenant_a' }
-      ]
-    },
-    runtime: {
-      generic: { key: 'runtime-generic', mongoUri: 'mongodb://runtime-generic:27017', dbName: 'runtime_generic' },
-      domains: [
-        { key: 'runtime-domain-1', extIdentifier: 'domain-1', mongoUri: 'mongodb://runtime-domain1:27017', dbName: 'runtime_domain_1' }
-      ],
-      tenants: [
-        { key: 'runtime-tenant-a', extIdentifier: 'tenant-a', mongoUri: 'mongodb://runtime-tenant-a:27017', dbName: 'runtime_tenant_a' }
-      ]
-    }
-  }
 });
 
 // Option A: Direct key usage (simplest)
@@ -176,24 +182,22 @@ const ops = chronos.with({
   collection: 'users'
 });
 
-// Option B: External identifier usage
+// Option B: Tenant-based routing
 const ops2 = chronos.with({
   databaseType: 'runtime',
-  tier: 'tenant', 
-  extIdentifier: 'tenant-a',  // Maps to 'runtime-tenant-a' key
+  tenantId: 'tenant-a',  // Maps to tenant-specific database
   collection: 'users'
 });
 
-// Option C: Generic tier
+// Option C: Logs database (no tiers)
 const ops3 = chronos.with({
-  databaseType: 'metadata',
-  tier: 'generic',
-  collection: 'config'
+  key: 'logs-main',
+  collection: 'audit'
 });
 
 await ops.create({ email: 'user@example.com' });
 await ops2.create({ email: 'user2@example.com' });
-await ops3.create({ setting: 'value' });
+await ops3.create({ event: 'user_login', timestamp: new Date() });
 ```
 
 ---
@@ -204,8 +208,16 @@ await ops3.create({ setting: 'value' });
 
 ```typescript
 interface ChronosConfig {
-  // Required: MongoDB connections (1-10 URIs)
-  mongoUris: string[];
+  // Required: MongoDB connections (define once, reference by key)
+  mongoConns: MongoConnConfig[];
+  
+  // Required: Database configuration (can have empty sections)
+  databases: {
+    metadata?: DatabaseConnection[];
+    knowledge?: DatabaseConnection[];
+    runtime?: DatabaseConnection[];
+    logs?: LogsDatabaseConfig;
+  };
   
   // Optional: S3-compatible storage (if not using localStorage)
   spacesConns?: SpacesConnConfig[];
@@ -295,9 +307,41 @@ interface ChronosConfig {
     autoDetect?: boolean;
   };
 }
+
+interface MongoConnConfig {
+  key: string;           // Unique key for referencing this connection
+  mongoUri: string;       // MongoDB connection URI
+}
+
+interface DatabaseConnection {
+  key: string;            // Globally unique identifier for direct routing
+  mongoConnKey: string;   // References a connection in mongoConns array
+  dbName: string;         // Database name
+  tenantId?: string;      // Optional tenant ID for mapping
+  spacesConnKey?: string; // References a connection in spacesConns array
+}
+
+interface LogsDatabaseConfig {
+  connection: DatabaseConnection; // Single connection for logs (no tiers)
+}
+
+interface SpacesConnConfig {
+  key: string;            // Unique key for referencing this S3 connection
+  endpoint: string;       // S3 endpoint URL
+  region: string;         // AWS region
+  accessKey: string;      // Access key
+  secretKey: string;      // Secret key
+  buckets: {
+    json: string;         // Bucket for JSON data (chronos-jsons)
+    content: string;      // Bucket for content files
+    versions: string;     // Bucket for versions/manifests
+    backup?: string;      // Bucket for backups (optional - can reuse json bucket)
+  };
+  forcePathStyle?: boolean; // Force path style (for MinIO)
+}
 ```
 
-### Enhanced Multi-Tenant Configuration
+### Multi-Tenant Architecture Explained
 
 ```typescript
 interface EnhancedChronosConfig extends ChronosConfig {
@@ -1074,13 +1118,17 @@ Built with:
 
 ## 📋 Frequently Asked Questions (FAQs)
 
-### **Q: What's the difference between ChronosConfig and EnhancedChronosConfig?**
-**A:** `ChronosConfig` is the basic configuration for single-tenant or simple multi-tenant setups. `EnhancedChronosConfig` extends it with `databaseTypes` for complex multi-tenant architectures with explicit database types (metadata, knowledge, runtime) and tiers (generic, domain, tenant).
+### **Q: What's the difference between the old and new configuration structure?**
+**A:** The new structure (v1.5+) uses a simplified key-based mapping system:
+- **Old**: `mongoUris` array + `databaseTypes` with nested tiers
+- **New**: `mongoConns` array + `databases` with direct arrays + `key`/`mongoConnKey`/`spacesConnKey` mapping
+- **Benefits**: More flexible, reusable connections, explicit relationships, easier maintenance
 
-### **Q: When should I use direct keys vs tier + extIdentifier?**
+### **Q: When should I use direct keys vs tenant-based routing?**
 **A:** 
 - **Direct keys** (`key: 'runtime-tenant-a'`) - Use when you know the exact database connection and want maximum performance
-- **Tier + extIdentifier** (`tier: 'tenant', extIdentifier: 'tenant-a'`) - Use when you want flexible mapping and easier configuration management
+- **Tenant-based routing** (`databaseType: 'runtime', tenantId: 'tenant-a'`) - Use when you want to route based on tenant context
+- **Logs database** (`key: 'logs-main'`) - Use for system logs and audit trails (no tiers)
 
 ### **Q: Can I mix different routing methods in the same application?**
 **A:** Yes! You can use different routing methods for different operations:

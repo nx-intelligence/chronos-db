@@ -86,9 +86,9 @@ export async function ensureBucketsExist(
   }
 
   const requiredBuckets = [
-    { name: spaces.jsonBucket, purpose: 'JSON documents' },
-    { name: spaces.contentBucket, purpose: 'Binary content' },
-    { name: spaces.backupsBucket, purpose: 'Backups and manifests' },
+    { name: spaces.buckets.json, purpose: 'JSON documents' },
+    { name: spaces.buckets.content, purpose: 'Binary content' },
+    ...(spaces.buckets.backup ? [{ name: spaces.buckets.backup, purpose: 'Backups and manifests' }] : []),
   ];
 
   let bucketsChecked = 0;

@@ -10,23 +10,35 @@ Common use cases and patterns.
 import { initChronos } from 'chronos-db';
 
 const chronos = initChronos(config);
-const ops = chronos.with({ dbName: 'app', collection: 'users' });
+
+// Option A: Direct key usage (simplest)
+const ops = chronos.with({ 
+  key: 'runtime-local', 
+  collection: 'users' 
+});
+
+// Option B: Tenant-based routing
+const ops2 = chronos.with({ 
+  databaseType: 'runtime',
+  tenantId: 'tenant-a',
+  collection: 'users' 
+});
 
 // Create
 const user = await ops.create({
   email: 'john@example.com',
   name: 'John Doe',
   status: 'pending'
-});
+}, 'system', 'user registration');
 
 // Update
-await ops.update(user.id, { status: 'active' });
+await ops.update(user.id, { status: 'active' }, user.ov, 'system', 'email verification');
 
-// Read
-const current = await ops.getItem(user.id);
+// Read latest
+const current = await ops.getLatest(user.id);
 
-// Delete
-await ops.delete(user.id);
+// Delete (logical)
+await ops.delete(user.id, current.ov, 'system', 'user deletion');
 ```
 
 ---
@@ -35,16 +47,16 @@ await ops.delete(user.id);
 
 ```javascript
 // Create and update a record
-const order = await ops.create({ amount: 100, status: 'pending' });
-await ops.update(order.id, { amount: 200, status: 'paid' });
-await ops.update(order.id, { status: 'shipped' });
+const order = await ops.create({ amount: 100, status: 'pending' }, 'system', 'order creation');
+await ops.update(order.id, { amount: 200, status: 'paid' }, order.ov, 'system', 'payment');
+await ops.update(order.id, { status: 'shipped' }, order.ov + 1, 'system', 'shipping');
 
 // Get original version
-const original = await ops.getItem(order.id, { ov: 0 });
+const original = await ops.getVersion(order.id, { ov: 0 });
 // { item: { amount: 100, status: 'pending' } }
 
 // Get as of yesterday
-const yesterday = await ops.getItem(order.id, { 
+const yesterday = await ops.getVersion(order.id, { 
   at: '2025-09-30T00:00:00Z' 
 });
 

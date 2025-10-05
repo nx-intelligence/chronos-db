@@ -1,30 +1,42 @@
 {
+  "mongoConns": [
+    {
+      "key": "mongo-cluster-main",
+      "mongoUri": "mongodb+srv://username:password@cluster-name.mongodb.net?retryWrites=true&w=majority"
+    }
+  ],
   "databases": {
-    "runtime": {
-      "generic": {
-        "key": "runtime-generic",
-        "mongoUri": "mongodb+srv://username:password@cluster-name.mongodb.net/runtime?retryWrites=true&w=majority",
-        "dbName": "runtime_generic"
-      },
-      "tenants": [
-        {
-          "key": "runtime-tenant-a",
-          "extIdentifier": "tenant-a",
-          "mongoUri": "mongodb+srv://username:password@cluster-name.mongodb.net/runtime?retryWrites=true&w=majority",
-          "dbName": "runtime_tenant_a"
-        }
-      ]
+    "runtime": [
+      {
+        "key": "runtime-tenant-a",
+        "tenantId": "tenant-a",
+        "mongoConnKey": "mongo-cluster-main",
+        "dbName": "runtime_tenant_a",
+        "spacesConnKey": "do-spaces-nyc3"
+      }
+    ],
+    "logs": {
+      "connection": {
+        "key": "logs-main",
+        "mongoConnKey": "mongo-cluster-main",
+        "dbName": "chronos_logs",
+        "spacesConnKey": "do-spaces-nyc3"
+      }
     }
   },
   "spacesConns": [
     {
+      "key": "do-spaces-nyc3",
       "endpoint": "https://nyc3.digitaloceanspaces.com",
       "region": "nyc3",
       "accessKey": "YOUR_DO_SPACES_ACCESS_KEY",
       "secretKey": "YOUR_DO_SPACES_SECRET_KEY",
-      "backupsBucket": "chronos-backups-nyc3",
-      "jsonBucket": "chronos-json-nyc3",
-      "contentBucket": "chronos-content-nyc3",
+      "buckets": {
+        "json": "chronos-json-nyc3",
+        "content": "chronos-content-nyc3",
+        "versions": "chronos-versions-nyc3",
+        "backup": "chronos-backups-nyc3"
+      },
       "forcePathStyle": false
     }
   ],

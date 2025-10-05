@@ -6,13 +6,17 @@ import type { ChronosConfig } from '../config.js';
 // ============================================================================
 
 export const SpacesConnSchema = z.object({
+  key: z.string().min(1, 'S3 connection key is required'),
   endpoint: z.string().url('Invalid S3 endpoint URL'),
   region: z.string().min(1, 'Region is required'),
   accessKey: z.string().min(1, 'Access key is required'),
   secretKey: z.string().min(1, 'Secret key is required'),
-  backupsBucket: z.string().min(1, 'Backups bucket is required'),
-  jsonBucket: z.string().min(1, 'JSON bucket is required'),
-  contentBucket: z.string().min(1, 'Content bucket is required'),
+        buckets: z.object({
+          json: z.string().min(1, 'JSON bucket is required'),
+          content: z.string().min(1, 'Content bucket is required'),
+          versions: z.string().min(1, 'Versions bucket is required'),
+          backup: z.string().min(1, 'Backup bucket is required').optional(),
+        }),
   forcePathStyle: z.boolean().optional(),
 });
 
@@ -58,28 +62,34 @@ export const CollectionMapSchema = z.object({
   }).optional(),
 });
 
+// MongoDB connection schema
+export const MongoConnSchema = z.object({
+  key: z.string().min(1, 'MongoDB connection key is required'),
+  mongoUri: z.string().min(1, 'MongoDB URI is required'),
+});
 
 // Database connection schema
 export const DatabaseConnectionSchema = z.object({
   key: z.string().min(1, 'Database key is required'),
-  mongoUri: z.string().min(1, 'MongoDB URI is required'),
+  mongoConnKey: z.string().min(1, 'MongoDB connection key is required'),
   dbName: z.string().min(1, 'Database name is required'),
-  extIdentifier: z.string().optional(),
+  tenantId: z.string().optional(),
+  spacesConnKey: z.string().optional(),
 });
 
-// Database type schema
-export const DatabaseTypeConfigSchema = z.object({
-  generic: DatabaseConnectionSchema.optional(),
-  domains: z.array(DatabaseConnectionSchema).optional(),
-  tenants: z.array(DatabaseConnectionSchema).optional(),
+// Logs database schema (no tiers - simple flat structure)
+export const LogsDatabaseConfigSchema = z.object({
+  connection: DatabaseConnectionSchema,
 });
 
 // Main configuration schema
 export const ChronosConfigSchema = z.object({
+  mongoConns: z.array(MongoConnSchema).min(1, 'At least one MongoDB connection is required'),
   databases: z.object({
-    metadata: DatabaseTypeConfigSchema.optional(),
-    knowledge: DatabaseTypeConfigSchema.optional(),
-    runtime: DatabaseTypeConfigSchema.optional(),
+    metadata: z.array(DatabaseConnectionSchema).optional(),
+    knowledge: z.array(DatabaseConnectionSchema).optional(),
+    runtime: z.array(DatabaseConnectionSchema).optional(),
+    logs: LogsDatabaseConfigSchema.optional(),
   }),
   spacesConns: z.array(SpacesConnSchema).max(10, 'Maximum 10 S3 connections allowed').optional(),
   localStorage: z.object({
@@ -105,20 +115,35 @@ export const ChronosConfigSchema = z.object({
   writeOptimization: z.any().optional(),
   transactions: z.any().optional(),
 }).superRefine((cfg, ctx) => {
-  // Validate that either spacesConns or localStorage is provided
-  if (!cfg.spacesConns && !cfg.localStorage?.enabled) {
+  // Validate that either spacesConns, localStorage, or individual connection spacesConn is provided
+  const hasGlobalSpacesConns = cfg.spacesConns && cfg.spacesConns.length > 0;
+  const hasLocalStorage = cfg.localStorage?.enabled;
+  
+  // Check if any database connection has its own S3 config
+  const hasIndividualS3Configs = (() => {
+    const checkConnection = (conn: any) => conn && conn.spacesConn;
+    const checkArray = (arr: any) => arr && arr.some(checkConnection);
+    const checkLogs = (logs: any) => logs && logs.connection && logs.connection.spacesConn;
+    
+    return checkArray(cfg.databases.metadata) ||
+           checkArray(cfg.databases.knowledge) ||
+           checkArray(cfg.databases.runtime) ||
+           checkLogs(cfg.databases.logs);
+  })();
+  
+  if (!hasGlobalSpacesConns && !hasLocalStorage && !hasIndividualS3Configs) {
     ctx.addIssue({ 
       code: z.ZodIssueCode.custom, 
-      message: 'Either spacesConns or localStorage must be configured.' 
+      message: 'Either global spacesConns, localStorage, or individual connection spacesConn must be configured.' 
     });
   }
   
   // Validate that at least one database type is configured
-  const hasDatabases = cfg.databases.metadata || cfg.databases.knowledge || cfg.databases.runtime;
+  const hasDatabases = cfg.databases.metadata || cfg.databases.knowledge || cfg.databases.runtime || cfg.databases.logs;
   if (!hasDatabases) {
     ctx.addIssue({ 
       code: z.ZodIssueCode.custom, 
-      message: 'At least one database type (metadata, knowledge, or runtime) must be configured.' 
+      message: 'At least one database type (metadata, knowledge, runtime, or logs) must be configured.' 
     });
   }
 });
