@@ -198,6 +198,200 @@ await ops3.create({ setting: 'value' });
 
 ---
 
+## ⚙️ Configuration Reference
+
+### Basic Configuration
+
+```typescript
+interface ChronosConfig {
+  // Required: MongoDB connections (1-10 URIs)
+  mongoUris: string[];
+  
+  // Optional: S3-compatible storage (if not using localStorage)
+  spacesConns?: SpacesConnConfig[];
+  
+  // Optional: Local filesystem storage (for development/testing)
+  localStorage?: {
+    basePath: string;
+    enabled: boolean;
+  };
+  
+  // Required: Counters database
+  counters: {
+    mongoUri: string;
+    dbName: string;
+  };
+  
+  // Optional: Routing configuration
+  routing?: {
+    hashAlgo?: 'rendezvous' | 'jump';
+    chooseKey?: string | ((ctx: RouteContext) => string);
+  };
+  
+  // Optional: Data retention policies
+  retention?: {
+    ver?: {
+      days?: number;
+      maxPerItem?: number;
+    };
+    counters?: {
+      days?: number;
+      weeks?: number;
+      months?: number;
+    };
+  };
+  
+  // Optional: Data rollup configuration
+  rollup?: any;
+  
+  // Optional: Collection mapping and validation
+  collectionMaps?: Record<string, {
+    indexedProps: string[]; // Empty array = auto-index all properties
+    base64Props?: Record<string, {
+      contentType: string;
+      preferredText?: boolean;
+      textCharset?: string;
+    }>;
+    validation?: {
+      requiredIndexed?: string[];
+    };
+  }>;
+  
+  // Optional: Counter rules
+  counterRules?: {
+    rules?: Array<{
+      name: string;
+      on?: ('CREATE' | 'UPDATE' | 'DELETE')[];
+      scope?: 'meta' | 'payload';
+      when: Record<string, any>;
+    }>;
+  };
+  
+  // Optional: Development shadow storage
+  devShadow?: {
+    enabled: boolean;
+    ttlHours: number;
+    maxBytesPerDoc?: number;
+  };
+  
+  // Optional: Hard delete capability
+  hardDeleteEnabled?: boolean;
+  
+  // Optional: Fallback queue configuration
+  fallback?: {
+    enabled: boolean;
+    maxRetries?: number;
+    retryDelayMs?: number;
+    maxDelayMs?: number;
+    deadLetterCollection?: string;
+  };
+  
+  // Optional: Write optimization
+  writeOptimization?: any;
+  
+  // Optional: Transaction configuration
+  transactions?: {
+    enabled?: boolean;
+    autoDetect?: boolean;
+  };
+}
+```
+
+### Enhanced Multi-Tenant Configuration
+
+```typescript
+interface EnhancedChronosConfig extends ChronosConfig {
+  // Optional: Enhanced multi-tenant database configuration
+  databaseTypes?: {
+    metadata?: DatabaseTypeConfig;
+    knowledge?: DatabaseTypeConfig;
+    runtime?: DatabaseTypeConfig;
+  };
+}
+
+interface DatabaseTypeConfig {
+  generic: DatabaseConnection;
+  domains: DatabaseConnection[];
+  tenants: DatabaseConnection[];
+}
+
+interface DatabaseConnection {
+  key: string;                    // Unique identifier
+  mongoUri: string;               // MongoDB connection URI
+  dbName: string;                 // Database name
+  extIdentifier?: string;         // External identifier for mapping
+}
+```
+
+### S3 Configuration
+
+```typescript
+interface SpacesConnConfig {
+  endpoint: string;               // S3 endpoint URL
+  region: string;                 // S3 region
+  accessKey: string;              // Access key
+  secretKey: string;              // Secret key
+  backupsBucket: string;         // Backups bucket name
+  jsonBucket: string;             // JSON storage bucket name
+  contentBucket: string;          // Content storage bucket name
+  forcePathStyle?: boolean;       // Force path-style URLs
+}
+```
+
+### Configuration Examples
+
+#### Minimal Configuration (localStorage)
+```typescript
+const chronos = initChronos({
+  mongoUris: ['mongodb://localhost:27017'],
+  localStorage: { enabled: true, basePath: './data' },
+  counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'chronos_counters' },
+  routing: { hashAlgo: 'rendezvous' },
+  retention: {},
+  rollup: {},
+});
+```
+
+#### Production Configuration (S3)
+```typescript
+const chronos = initChronos({
+  mongoUris: ['mongodb://prod1:27017', 'mongodb://prod2:27017'],
+  spacesConns: [{
+    endpoint: 'https://nyc3.digitaloceanspaces.com',
+    region: 'nyc3',
+    accessKey: 'YOUR_ACCESS_KEY',
+    secretKey: 'YOUR_SECRET_KEY',
+    backupsBucket: 'chronos-backups',
+    jsonBucket: 'chronos-json',
+    contentBucket: 'chronos-content',
+  }],
+  counters: { mongoUri: 'mongodb://prod1:27017', dbName: 'chronos_counters' },
+  routing: { hashAlgo: 'rendezvous' },
+  retention: {
+    ver: { days: 30, maxPerItem: 100 },
+    counters: { days: 7, weeks: 4, months: 12 }
+  },
+  rollup: {},
+  collectionMaps: {
+    users: {
+      indexedProps: ['email', 'status'],
+      validation: { requiredIndexed: ['email'] }
+    }
+  },
+  devShadow: { enabled: true, ttlHours: 24 },
+  fallback: {
+    enabled: true,
+    maxRetries: 3,
+    retryDelayMs: 1000,
+    maxDelayMs: 60000,
+    deadLetterCollection: 'chronos_fallback_dead'
+  },
+  transactions: { enabled: true, autoDetect: true }
+});
+```
+
+---
+
 ## 🎯 Core Features
 
 ### 1. **CRUD Operations**
