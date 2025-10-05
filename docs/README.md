@@ -39,8 +39,41 @@ npm install chronos
 import { initChronos } from 'chronos-db';
 
 const chronos = initChronos({
-  // Just MongoDB!
-  mongoUris: ['mongodb://localhost:27017'],
+  // Database configuration - can have empty sections
+  databases: {
+    metadata: {
+      generic: { 
+        key: 'meta-generic', 
+        mongoUri: 'mongodb://meta-generic:27017', 
+        dbName: 'meta_generic' 
+      },
+      tenants: [
+        { 
+          key: 'meta-tenant-a', 
+          extIdentifier: 'tenant-a', 
+          mongoUri: 'mongodb://meta-tenant-a:27017', 
+          dbName: 'meta_tenant_a' 
+        }
+      ]
+    },
+    runtime: {
+      generic: { 
+        key: 'runtime-generic', 
+        mongoUri: 'mongodb://runtime-generic:27017', 
+        dbName: 'runtime_generic' 
+      },
+      tenants: [
+        { 
+          key: 'runtime-tenant-a', 
+          extIdentifier: 'tenant-a', 
+          mongoUri: 'mongodb://runtime-tenant-a:27017', 
+          dbName: 'runtime_tenant_a' 
+        }
+      ]
+    }
+    // Note: knowledge is optional - you can omit it entirely
+    // Note: You can also omit metadata or runtime if you don't need them
+  },
   
   // Use local folder for storage (perfect for development)
   localStorage: {
@@ -74,7 +107,25 @@ const chronos = initChronos({
 });
 
 // MongoDB-like API!
-const ops = chronos.with({ dbName: 'myapp', collection: 'users' });
+const ops = chronos.with({ 
+  key: 'runtime-tenant-a',  // Direct key usage
+  collection: 'users' 
+});
+
+// Or use tier-based routing
+const ops2 = chronos.with({ 
+  databaseType: 'runtime',
+  tier: 'tenant',
+  extIdentifier: 'tenant-a',
+  collection: 'users' 
+});
+
+// Or use generic tier
+const ops3 = chronos.with({ 
+  databaseType: 'metadata',
+  tier: 'generic',
+  collection: 'config' 
+});
 
 // Create
 const user = await ops.create({ 

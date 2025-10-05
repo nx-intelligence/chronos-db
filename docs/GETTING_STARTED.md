@@ -18,8 +18,16 @@ The simplest way to get started - just MongoDB and a local folder:
 import { initChronos } from 'chronos-db';
 
 const chronos = initChronos({
-  // MongoDB connection
-  mongoUris: ['mongodb://localhost:27017'],
+  // Database configuration
+  databases: {
+    runtime: {
+      generic: {
+        key: 'runtime-generic',
+        mongoUri: 'mongodb://localhost:27017',
+        dbName: 'runtime_generic'
+      }
+    }
+  },
   
   // Local storage (no S3 needed!)
   localStorage: {
@@ -120,11 +128,24 @@ await chronos.admin.shutdown();
 ## Production Setup (MongoDB + S3)
 
 ```javascript
-const chronos = initUnifiedDataManager({
-  mongoUris: [
-    'mongodb://mongo1:27017',
-    'mongodb://mongo2:27017',
-  ],
+const chronos = initChronos({
+  databases: {
+    runtime: {
+      generic: {
+        key: 'runtime-generic',
+        mongoUri: 'mongodb://mongo1:27017',
+        dbName: 'runtime_generic'
+      },
+      tenants: [
+        {
+          key: 'runtime-tenant-a',
+          extIdentifier: 'tenant-a',
+          mongoUri: 'mongodb://mongo2:27017',
+          dbName: 'runtime_tenant_a'
+        }
+      ]
+    }
+  },
   
   // S3-compatible storage (AWS, DigitalOcean, MinIO, R2)
   spacesConns: [{

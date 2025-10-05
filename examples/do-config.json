@@ -1,7 +1,21 @@
 {
-  "mongoUris": [
-    "mongodb+srv://username:password@cluster-name.mongodb.net/database?retryWrites=true&w=majority"
-  ],
+  "databases": {
+    "runtime": {
+      "generic": {
+        "key": "runtime-generic",
+        "mongoUri": "mongodb+srv://username:password@cluster-name.mongodb.net/runtime?retryWrites=true&w=majority",
+        "dbName": "runtime_generic"
+      },
+      "tenants": [
+        {
+          "key": "runtime-tenant-a",
+          "extIdentifier": "tenant-a",
+          "mongoUri": "mongodb+srv://username:password@cluster-name.mongodb.net/runtime?retryWrites=true&w=majority",
+          "dbName": "runtime_tenant_a"
+        }
+      ]
+    }
+  },
   "spacesConns": [
     {
       "endpoint": "https://nyc3.digitaloceanspaces.com",

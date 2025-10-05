@@ -1,7 +1,13 @@
 {
-  "mongoUris": [
-    "mongodb://localhost:27017/chronos"
-  ],
+  "databases": {
+    "runtime": {
+      "generic": {
+        "key": "runtime-generic",
+        "mongoUri": "mongodb://localhost:27017/runtime",
+        "dbName": "runtime_generic"
+      }
+    }
+  },
   "spacesConns": [
     {
       "endpoint": "http://localhost:9000",

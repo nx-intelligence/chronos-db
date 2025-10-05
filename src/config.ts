@@ -17,11 +17,34 @@ export interface LocalStorageConfig {
 }
 
 /**
- * Main configuration interface for the unified data manager
+ * Database connection configuration
+ */
+export interface DatabaseConnection {
+  key: string;
+  mongoUri: string;
+  dbName: string;
+  extIdentifier?: string; // Optional external identifier for mapping
+}
+
+/**
+ * Database type configuration (metadata, knowledge, runtime)
+ */
+export interface DatabaseTypeConfig {
+  generic?: DatabaseConnection;
+  domains?: DatabaseConnection[];
+  tenants?: DatabaseConnection[];
+}
+
+/**
+ * Main configuration interface for chronos-db
  */
 export interface ChronosConfig {
-  /** 1-10 MongoDB connection URIs */
-  mongoUris: string[];
+  /** Database configuration - can have empty sections */
+  databases: {
+    metadata?: DatabaseTypeConfig;
+    knowledge?: DatabaseTypeConfig;
+    runtime?: DatabaseTypeConfig;
+  };
   /** 1-10 S3-compatible storage connections (optional if using localStorage) */
   spacesConns?: SpacesConnConfig[] | undefined;
   /** Local filesystem storage (for development/testing, NOT recommended for production) */
@@ -50,37 +73,6 @@ export interface ChronosConfig {
   transactions?: TransactionConfig | undefined;
 }
 
-// ============================================================================
-// Enhanced Multi-Tenant Configuration Types
-// ============================================================================
-
-export interface DatabaseConnection {
-  key: string;
-  mongoUri: string;
-  dbName: string;
-  extIdentifier?: string; // Optional external identifier for mapping
-}
-
-export interface DatabaseTypeConfig {
-  generic: DatabaseConnection;
-  domains: DatabaseConnection[];
-  tenants: DatabaseConnection[];
-}
-
-export interface DatabaseTypesConfig {
-  metadata?: DatabaseTypeConfig;
-  knowledge?: DatabaseTypeConfig;
-  runtime?: DatabaseTypeConfig;
-}
-
-// ============================================================================
-// Enhanced ChronosConfig with Multi-Tenant Support
-// ============================================================================
-
-export interface EnhancedChronosConfig extends ChronosConfig {
-  /** Enhanced multi-tenant database configuration */
-  databaseTypes?: DatabaseTypesConfig;
-}
 
 /**
  * S3-compatible storage connection configuration
@@ -517,12 +509,21 @@ export async function validateTransactionConfig(config: Partial<ChronosConfig>):
   logger.debug('Starting transaction configuration validation', {
     transactionsEnabled: config.transactions?.enabled,
     autoDetect: config.transactions?.autoDetect,
-    mongoUrisCount: config.mongoUris?.length
+    databasesCount: Object.keys(config.databases || {}).length
   });
 
   if (config.transactions?.enabled === true) {
     // Check if MongoDB supports transactions
-    const mongoUri = config.mongoUris?.[0];
+    // Get first available MongoDB URI from databases
+    let mongoUri: string | undefined;
+    if (config.databases?.metadata?.generic) {
+      mongoUri = config.databases.metadata.generic.mongoUri;
+    } else if (config.databases?.knowledge?.generic) {
+      mongoUri = config.databases.knowledge.generic.mongoUri;
+    } else if (config.databases?.runtime?.generic) {
+      mongoUri = config.databases.runtime.generic.mongoUri;
+    }
+    
     if (!mongoUri) {
       logger.error('Transaction validation failed: No MongoDB URI available');
       throw new Error('No MongoDB URI available for transaction validation');
@@ -565,7 +566,7 @@ export function validateChronosConfig(config: unknown): ChronosConfig {
     const resolved = resolveConfigDefaults(validated);
     
     logger.debug('UDM configuration validation completed successfully', {
-      mongoUrisCount: resolved.mongoUris.length,
+      databasesCount: Object.keys(resolved.databases).length,
       hasSpacesConns: !!resolved.spacesConns && resolved.spacesConns.length > 0,
       localStorageEnabled: resolved.localStorage?.enabled,
       transactionsEnabled: resolved.transactions?.enabled,

@@ -1,8 +1,36 @@
 {
-  "mongoUris": [
-    "mongodb+srv://username:password@cluster-a.mongodb.net/database?retryWrites=true&w=majority",
-    "mongodb+srv://username:password@cluster-b.mongodb.net/database?retryWrites=true&w=majority"
-  ],
+  "databases": {
+    "metadata": {
+      "generic": {
+        "key": "meta-generic",
+        "mongoUri": "mongodb+srv://username:password@cluster-a.mongodb.net/metadata?retryWrites=true&w=majority",
+        "dbName": "metadata_generic"
+      },
+      "tenants": [
+        {
+          "key": "meta-tenant-a",
+          "extIdentifier": "tenant-a",
+          "mongoUri": "mongodb+srv://username:password@cluster-b.mongodb.net/metadata?retryWrites=true&w=majority",
+          "dbName": "metadata_tenant_a"
+        }
+      ]
+    },
+    "runtime": {
+      "generic": {
+        "key": "runtime-generic",
+        "mongoUri": "mongodb+srv://username:password@cluster-a.mongodb.net/runtime?retryWrites=true&w=majority",
+        "dbName": "runtime_generic"
+      },
+      "tenants": [
+        {
+          "key": "runtime-tenant-a",
+          "extIdentifier": "tenant-a",
+          "mongoUri": "mongodb+srv://username:password@cluster-b.mongodb.net/runtime?retryWrites=true&w=majority",
+          "dbName": "runtime_tenant_a"
+        }
+      ]
+    }
+  },
   "spacesConns": [
     {
       "endpoint": "https://s3.us-east-1.amazonaws.com",

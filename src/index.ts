@@ -1,4 +1,4 @@
-import { validateChronosConfig, validateTransactionConfig, type EnhancedChronosConfig, type RouteContext } from './config.js';
+import { validateChronosConfig, validateTransactionConfig, type ChronosConfig, type RouteContext } from './config.js';
 import { setGlobalConfig } from './config/global.js';
 import { logger } from './utils/logger.js';
 import { BridgeRouter } from './router/router.js';
@@ -476,11 +476,11 @@ export interface PruneResult {
  * @returns Udm instance
  * @throws Error if configuration is invalid
  */
-export function initChronos(config: EnhancedChronosConfig): Chronos {
+export function initChronos(config: ChronosConfig): Chronos {
   const startTime = Date.now();
   logger.info('Initializing chronos-db', {
     version: '1.1.5',
-    mongoUrisCount: config.mongoUris.length,
+    databasesCount: Object.keys(config.databases).length,
     hasSpacesConns: !!config.spacesConns && config.spacesConns.length > 0,
     localStorageEnabled: config.localStorage?.enabled,
     transactionsEnabled: config.transactions?.enabled
@@ -502,12 +502,11 @@ export function initChronos(config: EnhancedChronosConfig): Chronos {
   // Initialize router
   logger.debug('Initializing BridgeRouter');
   const router = new BridgeRouter({
-    mongoUris: config.mongoUris,
+    databases: config.databases,
     ...(config.spacesConns && { spacesConns: config.spacesConns }),
     ...(config.localStorage && { localStorage: config.localStorage }),
     hashAlgo: config.routing.hashAlgo,
     chooseKey: config.routing.chooseKey ?? 'tenantId|dbName|collection:objectId',
-    ...(config.databaseTypes && { databaseTypes: config.databaseTypes }), // Enhanced multi-tenant support
   });
   logger.debug('BridgeRouter initialized successfully');
 
@@ -529,8 +528,18 @@ export function initChronos(config: EnhancedChronosConfig): Chronos {
   let fallbackWorker: FallbackWorker | null = null;
   let writeOptimizer: WriteOptimizer | null = null;
 
-  if (config.fallback?.enabled && config.mongoUris[0]) {
-    const fallbackClient = new MongoClient(config.mongoUris[0]);
+  // Get first available MongoDB URI for fallback
+  let fallbackMongoUri: string | undefined;
+  if (config.databases.metadata?.generic) {
+    fallbackMongoUri = config.databases.metadata.generic.mongoUri;
+  } else if (config.databases.knowledge?.generic) {
+    fallbackMongoUri = config.databases.knowledge.generic.mongoUri;
+  } else if (config.databases.runtime?.generic) {
+    fallbackMongoUri = config.databases.runtime.generic.mongoUri;
+  }
+
+  if (config.fallback?.enabled && fallbackMongoUri) {
+    const fallbackClient = new MongoClient(fallbackMongoUri);
     fallbackClient.connect().then(() => {
       const fallbackDb = fallbackClient.db('udm_system');
       if (config.fallback) {
@@ -851,7 +860,7 @@ export * from './service/enrich.js';
 
 // Re-export main types for convenience
 export type {
-  EnhancedChronosConfig,
+  ChronosConfig,
   RouteContext,
   VersionSpec,
   SpacesConnConfig,

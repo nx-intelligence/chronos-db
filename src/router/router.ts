@@ -3,7 +3,7 @@ import type { MongoClientOptions } from 'mongodb';
 import { S3Client } from '@aws-sdk/client-s3';
 import type { S3ClientConfig } from '@aws-sdk/client-s3';
 import { pickIndexHRW, generateRoutingKeyFromDSL } from './hash.js';
-import type { SpacesConnConfig, LocalStorageConfig, DatabaseTypesConfig, DatabaseConnection } from '../config.js';
+import type { SpacesConnConfig, LocalStorageConfig, DatabaseTypeConfig, DatabaseConnection } from '../config.js';
 import { LocalStorageAdapter } from '../storage/localStorage.js';
 import { S3StorageAdapter } from '../storage/s3Adapter.js';
 import type { StorageAdapter } from '../storage/interface.js';
@@ -28,14 +28,17 @@ export interface RouteContext {
 }
 
 export interface RouterInitArgs {
-  mongoUris: string[]; // length 1..10
   spacesConns?: SpacesConnConfig[] | undefined; // optional if using localStorage
   localStorage?: LocalStorageConfig | undefined; // optional filesystem storage for dev/test
   hashAlgo?: 'rendezvous' | 'jump'; // default "rendezvous"
   chooseKey?: string | ((ctx: RouteContext) => string); // default: tenantId ?? dbName ?? collection+":"+objectId
   
-  // Enhanced multi-tenant configuration
-  databaseTypes?: DatabaseTypesConfig;
+  // Database configuration
+  databases: {
+    metadata?: DatabaseTypeConfig;
+    knowledge?: DatabaseTypeConfig;
+    runtime?: DatabaseTypeConfig;
+  };
 }
 
 export interface BackendInfo {
@@ -53,13 +56,16 @@ export interface BackendInfo {
 // ============================================================================
 
 export class BridgeRouter {
-  private readonly mongoUris: string[];
   private readonly spacesConns: SpacesConnConfig[] | undefined;
   private readonly localStorage: LocalStorageAdapter | null;
   private readonly hashAlgo: 'rendezvous' | 'jump';
   private readonly chooseKey: string | ((ctx: RouteContext) => string);
   private readonly backendIds: string[];
-  private readonly databaseTypes: DatabaseTypesConfig | undefined;
+  private readonly databases: {
+    metadata?: DatabaseTypeConfig;
+    knowledge?: DatabaseTypeConfig;
+    runtime?: DatabaseTypeConfig;
+  };
   
   // Connection pools (lazy initialization)
   private mongoClients: Map<number, MongoClient> = new Map();
@@ -70,7 +76,7 @@ export class BridgeRouter {
 
   constructor(args: RouterInitArgs) {
     logger.debug('Initializing BridgeRouter', {
-      mongoUrisCount: args.mongoUris.length,
+      databasesCount: Object.keys(args.databases).length,
       spacesConnsCount: args.spacesConns?.length || 0,
       localStorageEnabled: args.localStorage?.enabled,
       hashAlgo: args.hashAlgo,
@@ -79,17 +85,16 @@ export class BridgeRouter {
     
     this.validateArgs(args);
     
-    this.mongoUris = [...args.mongoUris];
     this.spacesConns = args.spacesConns ? [...args.spacesConns] : undefined;
     this.localStorage = args.localStorage?.enabled 
       ? new LocalStorageAdapter(args.localStorage.basePath) 
       : null;
     this.hashAlgo = args.hashAlgo ?? 'rendezvous';
     this.chooseKey = args.chooseKey ?? 'tenantId|dbName|collection:objectId';
-    this.databaseTypes = args.databaseTypes;
+    this.databases = args.databases;
     
     logger.debug('BridgeRouter configuration set', {
-      mongoUrisCount: this.mongoUris.length,
+      databasesCount: Object.keys(this.databases).length,
       hasSpacesConns: !!this.spacesConns,
       hasLocalStorage: !!this.localStorage,
       hashAlgo: this.hashAlgo,
@@ -115,12 +120,10 @@ export class BridgeRouter {
    * Validate initialization arguments
    */
   private validateArgs(args: RouterInitArgs): void {
-    if (!args.mongoUris || args.mongoUris.length === 0) {
-      throw new Error('At least one MongoDB URI is required');
-    }
-    
-    if (args.mongoUris.length > 10) {
-      throw new Error('Maximum 10 MongoDB URIs allowed');
+    // Must have at least one database type configured
+    const hasDatabases = args.databases.metadata || args.databases.knowledge || args.databases.runtime;
+    if (!hasDatabases) {
+      throw new Error('At least one database type (metadata, knowledge, or runtime) must be configured');
     }
     
     // Must have either spacesConns (with connections) or localStorage
@@ -135,24 +138,6 @@ export class BridgeRouter {
     if (hasSpacesConns && args.spacesConns) {
       if (args.spacesConns.length > 10) {
         throw new Error('Maximum 10 S3 connections allowed');
-      }
-      
-      if (args.mongoUris.length !== args.spacesConns.length) {
-        throw new Error('Number of MongoDB URIs must match number of S3 connections');
-      }
-    }
-    
-    // Validate MongoDB URIs
-    for (let i = 0; i < args.mongoUris.length; i++) {
-      const uri = args.mongoUris[i];
-      if (!uri || typeof uri !== 'string') {
-        throw new Error(`Invalid MongoDB URI at index ${i}`);
-      }
-      
-      try {
-        new URL(uri);
-      } catch {
-        throw new Error(`Invalid MongoDB URI format at index ${i}: ${uri}`);
       }
     }
     
@@ -174,21 +159,70 @@ export class BridgeRouter {
   }
 
   /**
+   * Get all MongoDB URIs from database connections
+   */
+  private getAllMongoUris(): string[] {
+    const uris: string[] = [];
+    
+    // Collect all MongoDB URIs from all database types
+    if (this.databases.metadata) {
+      if (this.databases.metadata.generic) uris.push(this.databases.metadata.generic.mongoUri);
+      if (this.databases.metadata.domains) uris.push(...this.databases.metadata.domains.map(d => d.mongoUri));
+      if (this.databases.metadata.tenants) uris.push(...this.databases.metadata.tenants.map(t => t.mongoUri));
+    }
+    
+    if (this.databases.knowledge) {
+      if (this.databases.knowledge.generic) uris.push(this.databases.knowledge.generic.mongoUri);
+      if (this.databases.knowledge.domains) uris.push(...this.databases.knowledge.domains.map(d => d.mongoUri));
+      if (this.databases.knowledge.tenants) uris.push(...this.databases.knowledge.tenants.map(t => t.mongoUri));
+    }
+    
+    if (this.databases.runtime) {
+      if (this.databases.runtime.generic) uris.push(this.databases.runtime.generic.mongoUri);
+      if (this.databases.runtime.domains) uris.push(...this.databases.runtime.domains.map(d => d.mongoUri));
+      if (this.databases.runtime.tenants) uris.push(...this.databases.runtime.tenants.map(t => t.mongoUri));
+    }
+    
+    return uris;
+  }
+
+  /**
    * Generate backend IDs for consistent routing
    */
   private generateBackendIds(): string[] {
-    return this.mongoUris.map((uri, index) => {
+    // Collect all database connections from all database types
+    const allConnections: DatabaseConnection[] = [];
+    
+    if (this.databases.metadata) {
+      if (this.databases.metadata.generic) allConnections.push(this.databases.metadata.generic);
+      if (this.databases.metadata.domains) allConnections.push(...this.databases.metadata.domains);
+      if (this.databases.metadata.tenants) allConnections.push(...this.databases.metadata.tenants);
+    }
+    
+    if (this.databases.knowledge) {
+      if (this.databases.knowledge.generic) allConnections.push(this.databases.knowledge.generic);
+      if (this.databases.knowledge.domains) allConnections.push(...this.databases.knowledge.domains);
+      if (this.databases.knowledge.tenants) allConnections.push(...this.databases.knowledge.tenants);
+    }
+    
+    if (this.databases.runtime) {
+      if (this.databases.runtime.generic) allConnections.push(this.databases.runtime.generic);
+      if (this.databases.runtime.domains) allConnections.push(...this.databases.runtime.domains);
+      if (this.databases.runtime.tenants) allConnections.push(...this.databases.runtime.tenants);
+    }
+    
+    return allConnections.map((conn, index) => {
       if (this.localStorage) {
         // For local storage, just use the MongoDB URI
-        return `${uri}|localhost|local`;
+        return `${conn.mongoUri}|localhost|local`;
       }
       
       if (!this.spacesConns || !this.spacesConns[index]) {
         throw new Error(`Backend index ${index} is not available`);
       }
       
-      const conn = this.spacesConns[index];
-      return `${uri}|${conn.endpoint}|${conn.jsonBucket}`;
+      const spacesConn = this.spacesConns[index];
+      return `${conn.mongoUri}|${spacesConn.endpoint}|${spacesConn.jsonBucket}`;
     });
   }
 
@@ -209,10 +243,6 @@ export class BridgeRouter {
    * @returns Database connection info
    */
   private resolveDatabaseConnection(ctx: RouteContext): { mongoUri: string; dbName: string } | null {
-    if (!this.databaseTypes) {
-      return null; // Fall back to legacy routing
-    }
-
     // Direct key lookup
     if (ctx.key) {
       return this.findConnectionByKey(ctx.key);
@@ -220,19 +250,19 @@ export class BridgeRouter {
 
     // Resolve by databaseType/tier/extIdentifier
     if (ctx.databaseType && ctx.tier) {
-      const dbType = this.databaseTypes[ctx.databaseType];
+      const dbType = this.databases[ctx.databaseType];
       if (!dbType) {
         return null;
       }
 
-      if (ctx.tier === 'generic') {
+      if (ctx.tier === 'generic' && dbType.generic) {
         return {
           mongoUri: dbType.generic.mongoUri,
           dbName: dbType.generic.dbName
         };
       }
 
-      if (ctx.tier === 'domain' && ctx.extIdentifier) {
+      if (ctx.tier === 'domain' && ctx.extIdentifier && dbType.domains) {
         const domain = dbType.domains.find(d => d.extIdentifier === ctx.extIdentifier);
         if (domain) {
           return {
@@ -242,7 +272,7 @@ export class BridgeRouter {
         }
       }
 
-      if (ctx.tier === 'tenant' && ctx.extIdentifier) {
+      if (ctx.tier === 'tenant' && ctx.extIdentifier && dbType.tenants) {
         const tenant = dbType.tenants.find(t => t.extIdentifier === ctx.extIdentifier);
         if (tenant) {
           return {
@@ -262,13 +292,11 @@ export class BridgeRouter {
    * @returns Database connection info or null
    */
   private findConnectionByKey(key: string): { mongoUri: string; dbName: string } | null {
-    if (!this.databaseTypes) {
-      return null;
-    }
-
-    for (const dbType of Object.values(this.databaseTypes)) {
+    for (const dbType of Object.values(this.databases)) {
+      if (!dbType) continue;
+      
       // Check generic
-      if (dbType.generic.key === key) {
+      if (dbType.generic && dbType.generic.key === key) {
         return {
           mongoUri: dbType.generic.mongoUri,
           dbName: dbType.generic.dbName
@@ -276,21 +304,25 @@ export class BridgeRouter {
       }
 
       // Check domains
-      const domain = dbType.domains.find((d: DatabaseConnection) => d.key === key);
-      if (domain) {
-        return {
-          mongoUri: domain.mongoUri,
-          dbName: domain.dbName
-        };
+      if (dbType.domains) {
+        const domain = dbType.domains.find((d: DatabaseConnection) => d.key === key);
+        if (domain) {
+          return {
+            mongoUri: domain.mongoUri,
+            dbName: domain.dbName
+          };
+        }
       }
 
       // Check tenants
-      const tenant = dbType.tenants.find((t: DatabaseConnection) => t.key === key);
-      if (tenant) {
-        return {
-          mongoUri: tenant.mongoUri,
-          dbName: tenant.dbName
-        };
+      if (dbType.tenants) {
+        const tenant = dbType.tenants.find((t: DatabaseConnection) => t.key === key);
+        if (tenant) {
+          return {
+            mongoUri: tenant.mongoUri,
+            dbName: tenant.dbName
+          };
+        }
       }
     }
 
@@ -307,10 +339,12 @@ export class BridgeRouter {
       throw new Error('Router has been shutdown');
     }
     
+    const mongoUris = this.getAllMongoUris();
+    
     // Admin override
     if (ctx.forcedIndex !== undefined) {
-      if (ctx.forcedIndex < 0 || ctx.forcedIndex >= this.mongoUris.length) {
-        throw new Error(`Forced index ${ctx.forcedIndex} is out of range (0-${this.mongoUris.length - 1})`);
+      if (ctx.forcedIndex < 0 || ctx.forcedIndex >= mongoUris.length) {
+        throw new Error(`Forced index ${ctx.forcedIndex} is out of range (0-${mongoUris.length - 1})`);
       }
       return ctx.forcedIndex;
     }
@@ -319,11 +353,11 @@ export class BridgeRouter {
     const dbConnection = this.resolveDatabaseConnection(ctx);
     if (dbConnection) {
       // Find the backend index for this specific MongoDB URI
-      const index = this.mongoUris.findIndex(uri => uri === dbConnection.mongoUri);
+      const index = mongoUris.findIndex(uri => uri === dbConnection.mongoUri);
       if (index !== -1) {
         return index;
       }
-      // If URI not found in mongoUris, fall back to legacy routing
+      // If URI not found, fall back to legacy routing
     }
     
     // Legacy routing fallback
@@ -332,7 +366,7 @@ export class BridgeRouter {
     if (this.hashAlgo === 'jump') {
       // Jump consistent hashing
       const { jumpHash } = require('./hash.js');
-      return jumpHash(key, this.mongoUris.length);
+      return jumpHash(key, mongoUris.length);
     } else {
       // Rendezvous hashing (default)
       return pickIndexHRW(key, this.backendIds);
@@ -349,8 +383,9 @@ export class BridgeRouter {
       throw new Error('Router has been shutdown');
     }
     
-    if (index < 0 || index >= this.mongoUris.length) {
-      throw new Error(`Backend index ${index} is out of range (0-${this.mongoUris.length - 1})`);
+    const mongoUris = this.getAllMongoUris();
+    if (index < 0 || index >= mongoUris.length) {
+      throw new Error(`Backend index ${index} is out of range (0-${mongoUris.length - 1})`);
     }
     
     if (this.mongoClients.has(index)) {
@@ -358,7 +393,7 @@ export class BridgeRouter {
     }
     
     // Lazy initialization
-    const mongoUri = this.mongoUris[index];
+    const mongoUri = mongoUris[index];
     if (!mongoUri) {
       throw new Error(`MongoDB URI at index ${index} is not available`);
     }
@@ -484,7 +519,8 @@ export class BridgeRouter {
       throw new Error('Router has been shutdown');
     }
     
-    return this.mongoUris.map((mongoUri, index) => {
+    const mongoUris = this.getAllMongoUris();
+    return mongoUris.map((mongoUri, index) => {
       if (this.localStorage) {
         return {
           index,
@@ -599,7 +635,7 @@ export class BridgeRouter {
     return {
       mongoClients: this.mongoClients.size,
       s3Clients: this.s3Clients.size,
-      totalBackends: this.mongoUris.length,
+      totalBackends: this.getAllMongoUris().length,
     };
   }
 }

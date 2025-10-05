@@ -31,7 +31,15 @@ In your DigitalOcean dashboard:
 import { initChronos } from 'chronos-db';
 
 const chronos = initChronos({
-  mongoUris: ['mongodb://localhost:27017'],
+  databases: {
+    runtime: {
+      generic: {
+        key: 'runtime-generic',
+        mongoUri: 'mongodb://localhost:27017',
+        dbName: 'runtime_generic'
+      }
+    }
+  },
   
   // DigitalOcean Spaces configuration
   spacesConns: [{

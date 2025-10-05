@@ -8,7 +8,15 @@ Complete reference for all configuration options.
 
 ```javascript
 {
-  mongoUris: ['mongodb://localhost:27017'],
+  databases: {
+    runtime: {
+      generic: {
+        key: 'runtime-generic',
+        mongoUri: 'mongodb://localhost:27017',
+        dbName: 'runtime_generic'
+      }
+    }
+  },
   localStorage: { enabled: true, basePath: './data' },
   counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'chronos_counters' },
   routing: { hashAlgo: 'rendezvous' },
@@ -29,11 +37,39 @@ Complete reference for all configuration options.
 
 ```javascript
 {
-  // MongoDB connections (1-10 backends)
-  mongoUris: [
-    'mongodb://primary:27017',
-    'mongodb://secondary:27017'
-  ],
+  // Database configuration - can have empty sections
+  databases: {
+    metadata: {
+      generic: {
+        key: 'meta-generic',
+        mongoUri: 'mongodb://primary:27017',
+        dbName: 'metadata_generic'
+      },
+      tenants: [
+        {
+          key: 'meta-tenant-a',
+          extIdentifier: 'tenant-a',
+          mongoUri: 'mongodb://secondary:27017',
+          dbName: 'metadata_tenant_a'
+        }
+      ]
+    },
+    runtime: {
+      generic: {
+        key: 'runtime-generic',
+        mongoUri: 'mongodb://primary:27017',
+        dbName: 'runtime_generic'
+      },
+      tenants: [
+        {
+          key: 'runtime-tenant-a',
+          extIdentifier: 'tenant-a',
+          mongoUri: 'mongodb://secondary:27017',
+          dbName: 'runtime_tenant_a'
+        }
+      ]
+    }
+  },
   
   // Storage: EITHER spacesConns OR localStorage
   
@@ -155,20 +191,56 @@ Complete reference for all configuration options.
 
 ## Configuration Options Reference
 
-### `mongoUris`
+### `databases`
 
-**Type:** `string[]`  
-**Required:** Yes  
-**Range:** 1-10 connections
+**Type:** `{ metadata?: DatabaseTypeConfig, knowledge?: DatabaseTypeConfig, runtime?: DatabaseTypeConfig }`  
+**Required:** Yes (at least one database type)  
+**Description:** Database configuration organized by type and tier
 
-MongoDB connection URIs for your data.
+Database configuration object that defines all database connections. You can omit any database type (`metadata`, `knowledge`, `runtime`) if you don't need it.
 
 ```javascript
-mongoUris: [
-  'mongodb://localhost:27017',
-  'mongodb://replica2:27017'
-]
+databases: {
+  metadata: {
+    generic: {
+      key: 'meta-generic',
+      mongoUri: 'mongodb://localhost:27017',
+      dbName: 'metadata_generic'
+    },
+    tenants: [
+      {
+        key: 'meta-tenant-a',
+        extIdentifier: 'tenant-a',
+        mongoUri: 'mongodb://localhost:27017',
+        dbName: 'metadata_tenant_a'
+      }
+    ]
+  },
+  runtime: {
+    generic: {
+      key: 'runtime-generic',
+      mongoUri: 'mongodb://localhost:27017',
+      dbName: 'runtime_generic'
+    }
+  }
+}
 ```
+
+**Database Types:**
+- **`metadata`** - System configuration, user settings, application metadata
+- **`knowledge`** - Content, documents, knowledge base, static data  
+- **`runtime`** - User data, transactions, dynamic application data
+
+**Tiers:**
+- **`generic`** - Shared across all tenants (system-wide data)
+- **`domains`** - Shared within a domain (multi-tenant within domain)
+- **`tenants`** - Isolated per tenant (single-tenant data)
+
+**Connection Properties:**
+- **`key`** - Globally unique identifier for direct routing (e.g., `"runtime-tenant-a"`)
+- **`mongoUri`** - MongoDB connection URI
+- **`dbName`** - Database name
+- **`extIdentifier`** - Optional external identifier for mapping (e.g., `"tenant-a"`)
 
 ---
 
@@ -176,7 +248,7 @@ mongoUris: [
 
 **Type:** `SpacesConnConfig[]`  
 **Required:** If not using `localStorage`  
-**Range:** 1-10 connections (must match `mongoUris` length)
+**Range:** 1-10 connections
 
 S3-compatible storage connections.
 
@@ -383,7 +455,15 @@ writeOptimization: {
 
 ```javascript
 {
-  mongoUris: ['mongodb://localhost:27017'],
+  databases: {
+    runtime: {
+      generic: {
+        key: 'runtime-generic',
+        mongoUri: 'mongodb://localhost:27017',
+        dbName: 'runtime_generic'
+      }
+    }
+  },
   localStorage: { enabled: true, basePath: './data' },
   counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'counters' },
   devShadow: { enabled: true, ttlHours: 24 },
@@ -395,9 +475,15 @@ writeOptimization: {
 
 ```javascript
 {
-  mongoUris: [
-    'mongodb://mongo1:27017,mongo2:27017,mongo3:27017?replicaSet=rs0'
-  ],
+  databases: {
+    runtime: {
+      generic: {
+        key: 'runtime-generic',
+        mongoUri: 'mongodb://mongo1:27017,mongo2:27017,mongo3:27017?replicaSet=rs0',
+        dbName: 'runtime_generic'
+      }
+    }
+  },
   spacesConns: [{
     endpoint: 'https://s3.amazonaws.com',
     region: 'us-east-1',
@@ -433,9 +519,9 @@ writeOptimization: {
 
 ---
 
-## 🏢 Enhanced Multi-Tenant Configuration
+## 🏢 Multi-Tenant Configuration
 
-For complex multi-tenant architectures, use `EnhancedChronosConfig` with explicit database types and tiers:
+For complex multi-tenant architectures, use the `databases` configuration with explicit database types and tiers:
 
 ### **Database Types**
 - **`metadata`** - System configuration, user settings, application metadata
@@ -444,27 +530,14 @@ For complex multi-tenant architectures, use `EnhancedChronosConfig` with explici
 
 ### **Tiers**
 - **`generic`** - Shared across all tenants (system-wide data)
-- **`domain`** - Shared within a domain (multi-tenant within domain)
-- **`tenant`** - Isolated per tenant (single-tenant data)
+- **`domains`** - Shared within a domain (multi-tenant within domain)
+- **`tenants`** - Isolated per tenant (single-tenant data)
 
 ### **Configuration Example**
 
 ```javascript
 const config = {
-  mongoUris: [
-    'mongodb://meta-generic:27017',
-    'mongodb://meta-tenant-a:27017',
-    'mongodb://runtime-generic:27017',
-    'mongodb://runtime-tenant-a:27017'
-  ],
-  spacesConns: [/* S3 config */],
-  counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'chronos_counters' },
-  routing: { hashAlgo: 'rendezvous' },
-  retention: {},
-  rollup: {},
-  
-  // Enhanced multi-tenant configuration
-  databaseTypes: {
+  databases: {
     metadata: {
       generic: { 
         key: 'meta-generic', 
@@ -495,7 +568,12 @@ const config = {
         }
       ]
     }
-  }
+  },
+  spacesConns: [/* S3 config */],
+  counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'chronos_counters' },
+  routing: { hashAlgo: 'rendezvous' },
+  retention: {},
+  rollup: {}
 };
 ```
 

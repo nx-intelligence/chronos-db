@@ -43,8 +43,16 @@ import { initChronos } from 'chronos-db';
 import { initChronos } from 'chronos-db';
 
 const chronos = initChronos({
-  // Required: MongoDB connection
-  mongoUris: ['mongodb://localhost:27017'],
+  // Required: Database configuration
+  databases: {
+    runtime: {
+      generic: {
+        key: 'runtime-generic',
+        mongoUri: 'mongodb://localhost:27017',
+        dbName: 'runtime_generic'
+      }
+    }
+  },
   
   // Required: Local storage (for development)
   localStorage: {
@@ -81,10 +89,16 @@ const chronos = initChronos({
 
 ```typescript
 const chronos = initChronos({
-  // MongoDB cluster
-  mongoUris: [
-    'mongodb://mongo1:27017,mongo2:27017,mongo3:27017?replicaSet=rs0'
-  ],
+  // Database configuration
+  databases: {
+    runtime: {
+      generic: {
+        key: 'runtime-generic',
+        mongoUri: 'mongodb://mongo1:27017,mongo2:27017,mongo3:27017?replicaSet=rs0',
+        dbName: 'runtime_generic'
+      }
+    }
+  },
   
   // S3-compatible storage
   spacesConns: [{
@@ -258,14 +272,28 @@ console.log('Analytics totals:', totals);
 
 ## 🔄 Migration from Previous Versions
 
-### If You Have Existing Configuration
+### Updated Configuration Structure
 
-Your existing configuration will continue to work without changes:
+The configuration structure has been simplified. Update your existing configuration:
 
 ```typescript
-// ✅ This still works (backward compatible)
+// ❌ Old structure (no longer supported)
 const chronos = initChronos({
   mongoUris: ['mongodb://localhost:27017'],
+  databaseTypes: { /* ... */ }
+});
+
+// ✅ New structure (required)
+const chronos = initChronos({
+  databases: {
+    runtime: {
+      generic: {
+        key: 'runtime-generic',
+        mongoUri: 'mongodb://localhost:27017',
+        dbName: 'runtime_generic'
+      }
+    }
+  },
   localStorage: { enabled: true, basePath: './data' },
   counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'counters' },
   routing: { hashAlgo: 'rendezvous' },
@@ -304,10 +332,14 @@ const chronos = initChronos({
 
 ```typescript
 interface MinimalConfig {
-  mongoUris: string[];                    // MongoDB connection URIs
-  localStorage?: LocalStorageConfig;       // OR spacesConns
-  counters: CountersConfig;               // Counters database
-  routing: RoutingConfig;                 // Routing configuration
+  databases: {
+    metadata?: DatabaseTypeConfig;
+    knowledge?: DatabaseTypeConfig;
+    runtime?: DatabaseTypeConfig;
+  };                                          // Database configuration
+  localStorage?: LocalStorageConfig;         // OR spacesConns
+  counters: CountersConfig;                   // Counters database
+  routing: RoutingConfig;                     // Routing configuration
   collectionMaps: Record<string, CollectionMap>; // Collection definitions
 }
 ```
@@ -350,7 +382,15 @@ npm install chronos-db@latest
 ```typescript
 // ✅ This works now
 const config = {
-  mongoUris: ['mongodb://localhost:27017'],
+  databases: {
+    runtime: {
+      generic: {
+        key: 'runtime-generic',
+        mongoUri: 'mongodb://localhost:27017',
+        dbName: 'runtime_generic'
+      }
+    }
+  },
   localStorage: { enabled: true, basePath: './data' },
   counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'counters' },
   routing: { hashAlgo: 'rendezvous' },
@@ -383,7 +423,15 @@ try {
 ```typescript
 // Minimal configuration for development
 const devConfig = {
-  mongoUris: ['mongodb://localhost:27017'],
+  databases: {
+    runtime: {
+      generic: {
+        key: 'runtime-generic',
+        mongoUri: 'mongodb://localhost:27017',
+        dbName: 'runtime_generic'
+      }
+    }
+  },
   localStorage: { enabled: true, basePath: './dev-data' },
   counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'dev_counters' },
   routing: { hashAlgo: 'rendezvous' },
@@ -401,7 +449,15 @@ const devConfig = {
 ```typescript
 // Production configuration with optimizations
 const prodConfig = {
-  mongoUris: ['mongodb://cluster:27017'],
+  databases: {
+    runtime: {
+      generic: {
+        key: 'runtime-generic',
+        mongoUri: 'mongodb://cluster:27017',
+        dbName: 'runtime_generic'
+      }
+    }
+  },
   spacesConns: [{ /* S3 config */ }],
   counters: { mongoUri: 'mongodb://counters:27017', dbName: 'prod_counters' },
   routing: { hashAlgo: 'rendezvous', chooseKey: 'tenantId|dbName' },
