@@ -1,6 +1,6 @@
 import { MongoClient } from 'mongodb';
 import { BridgeRouter } from '../router/router.js';
-import type { UdmConfig } from '../config.js';
+import type { ChronosConfig } from '../config.js';
 
 // ============================================================================
 // Types
@@ -32,7 +32,7 @@ export interface BackendInfo {
  * @param config - UDM configuration
  * @returns Health report
  */
-export async function health(router: BridgeRouter, config: UdmConfig): Promise<HealthReport> {
+export async function health(router: BridgeRouter, config: ChronosConfig): Promise<HealthReport> {
   const timestamp = new Date().toISOString();
   const backends = await listBackends(router);
   
@@ -131,7 +131,7 @@ export async function listBackends(router: BridgeRouter): Promise<BackendInfo[]>
  * @param router - Bridge router instance
  * @param config - UDM configuration
  */
-export async function shutdown(router: BridgeRouter, config: UdmConfig): Promise<void> {
+export async function shutdown(router: BridgeRouter, config: ChronosConfig): Promise<void> {
   // Shutdown router (closes all MongoDB connections)
   await router.shutdown();
   

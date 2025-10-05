@@ -218,7 +218,7 @@ export async function createItem(
     // 1. Route to backend
     const routeInfo = router.getRouteInfo(ctx);
     const mongoClient = await router.getMongo(routeInfo.index);
-    const mongo = mongoClient.db(ctx.dbName);
+    const mongo = mongoClient.db(routeInfo.resolvedDbName || ctx.dbName);
     const storage = router.getStorage(routeInfo.index);
     const spaces = router.getSpaces(routeInfo.index);
     
@@ -497,7 +497,7 @@ export async function updateItem(
     // 1. Route to backend
     const routeInfo = router.getRouteInfo(ctx);
     const mongoClient = await router.getMongo(routeInfo.index);
-    const mongo = mongoClient.db(ctx.dbName);
+    const mongo = mongoClient.db(routeInfo.resolvedDbName || ctx.dbName);
     const storage = router.getStorage(routeInfo.index);
     const spaces = router.getSpaces(routeInfo.index);
     
@@ -759,7 +759,7 @@ export async function deleteItem(
     // 1. Route to backend
     const routeInfo = router.getRouteInfo(ctx);
     const mongoClient = await router.getMongo(routeInfo.index);
-    const mongo = mongoClient.db(ctx.dbName);
+    const mongo = mongoClient.db(routeInfo.resolvedDbName || ctx.dbName);
     const storage = router.getStorage(routeInfo.index);
     const spaces = router.getSpaces(routeInfo.index);
     

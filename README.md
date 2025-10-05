@@ -45,9 +45,9 @@ npm install chronos-db
 ### Basic Usage
 
 ```typescript
-import { initUnifiedDataManager } from 'chronos-db';
+import { initChronos } from 'chronos-db';
 
-const udm = initUnifiedDataManager({
+const chronos = initChronos({
   mongoUris: ['mongodb://localhost:27017'],
   spacesConns: [{
     endpoint: 'https://nyc3.digitaloceanspaces.com',
@@ -78,7 +78,7 @@ const udm = initUnifiedDataManager({
 });
 
 // Context-bound operations
-const ops = udm.with({
+const ops = chronos.with({
   dbName: 'myapp',
   collection: 'users',
   tenantId: 'tenant123',
@@ -108,7 +108,92 @@ await ops.enrich(result.id, {
 }, { functionId: 'scorer@v1' });
 
 // Shutdown
-await udm.admin.shutdown();
+await chronos.admin.shutdown();
+```
+
+---
+
+## 🏢 Enhanced Multi-Tenant Usage
+
+For complex multi-tenant architectures with multiple database types and tiers:
+
+```typescript
+import { initChronos } from 'chronos-db';
+
+const chronos = initChronos({
+  mongoUris: [
+    'mongodb://meta-generic:27017',
+    'mongodb://meta-domain1:27017', 
+    'mongodb://meta-tenant-a:27017',
+    'mongodb://know-generic:27017',
+    'mongodb://know-domain1:27017',
+    'mongodb://know-tenant-a:27017',
+    'mongodb://runtime-generic:27017',
+    'mongodb://runtime-domain1:27017',
+    'mongodb://runtime-tenant-a:27017'
+  ],
+  spacesConns: [/* your S3 config */],
+  counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'chronos_counters' },
+  routing: { hashAlgo: 'rendezvous' },
+  retention: {},
+  rollup: {},
+  
+  // Enhanced multi-tenant configuration
+  databaseTypes: {
+    metadata: {
+      generic: { key: 'meta-generic', mongoUri: 'mongodb://meta-generic:27017', dbName: 'meta_generic' },
+      domains: [
+        { key: 'meta-domain-1', extIdentifier: 'domain-1', mongoUri: 'mongodb://meta-domain1:27017', dbName: 'meta_domain_1' }
+      ],
+      tenants: [
+        { key: 'meta-tenant-a', extIdentifier: 'tenant-a', mongoUri: 'mongodb://meta-tenant-a:27017', dbName: 'meta_tenant_a' }
+      ]
+    },
+    knowledge: {
+      generic: { key: 'know-generic', mongoUri: 'mongodb://know-generic:27017', dbName: 'know_generic' },
+      domains: [
+        { key: 'know-domain-1', extIdentifier: 'domain-1', mongoUri: 'mongodb://know-domain1:27017', dbName: 'know_domain_1' }
+      ],
+      tenants: [
+        { key: 'know-tenant-a', extIdentifier: 'tenant-a', mongoUri: 'mongodb://know-tenant-a:27017', dbName: 'know_tenant_a' }
+      ]
+    },
+    runtime: {
+      generic: { key: 'runtime-generic', mongoUri: 'mongodb://runtime-generic:27017', dbName: 'runtime_generic' },
+      domains: [
+        { key: 'runtime-domain-1', extIdentifier: 'domain-1', mongoUri: 'mongodb://runtime-domain1:27017', dbName: 'runtime_domain_1' }
+      ],
+      tenants: [
+        { key: 'runtime-tenant-a', extIdentifier: 'tenant-a', mongoUri: 'mongodb://runtime-tenant-a:27017', dbName: 'runtime_tenant_a' }
+      ]
+    }
+  }
+});
+
+// Option A: Direct key usage (simplest)
+const ops = chronos.with({
+  key: 'runtime-tenant-a',  // Unique key, automatically resolves everything
+  collection: 'users'
+});
+
+// Option B: External identifier usage
+const ops2 = chronos.with({
+  databaseType: 'runtime',
+  tier: 'tenant', 
+  extIdentifier: 'tenant-a',  // Maps to 'runtime-tenant-a' key
+  collection: 'users'
+});
+
+// Option C: Generic tier
+const ops3 = chronos.with({
+  databaseType: 'metadata',
+  tier: 'generic',
+  collection: 'config'
+});
+
+await ops.create({ email: 'user@example.com' });
+await ops2.create({ email: 'user2@example.com' });
+await ops3.create({ setting: 'value' });
 ```
 
 ---
@@ -228,7 +313,7 @@ const config = {
 };
 
 // Query totals
-const totals = await udm.counters.getTotals({
+const totals = await chronos.counters.getTotals({
   dbName: 'myapp',
   collection: 'users',
 });
@@ -262,21 +347,21 @@ const config = {
 };
 
 // Start worker for automatic retries
-await udm.fallback?.startWorker();
+await chronos.fallback?.startWorker();
 
 // Monitor queue
-const stats = await udm.fallback?.getQueueStats();
+const stats = await chronos.fallback?.getQueueStats();
 console.log('Pending ops:', stats.queueSize);
 console.log('Dead letters:', stats.deadLetterSize);
 
 // Retry dead letter operation
-const deadLetters = await udm.fallback?.getDeadLetterOps({}, 10);
+const deadLetters = await chronos.fallback?.getDeadLetterOps({}, 10);
 for (const op of deadLetters) {
-  await udm.fallback?.retryDeadLetter(op._id.toString());
+  await chronos.fallback?.retryDeadLetter(op._id.toString());
 }
 
 // Stop worker
-await udm.fallback?.stopWorker();
+await chronos.fallback?.stopWorker();
 ```
 
 ---
@@ -336,14 +421,14 @@ Every record includes comprehensive system tracking:
 **State Management:**
 ```typescript
 // Mark items as processed based on TTL expiration
-const result = await udm.admin.markItemsAsProcessedByTTL(
+const result = await chronos.admin.markItemsAsProcessedByTTL(
   { dbName: 'myapp', collection: 'users' },
   24, // TTL in hours
   { confirm: true, dryRun: false }
 );
 
 // Mark specific item as processed
-const marked = await udm.admin.markItemAsProcessed(
+const marked = await chronos.admin.markItemAsProcessed(
   { dbName: 'myapp', collection: 'users' },
   'item-id',
   { confirm: true }
@@ -358,14 +443,14 @@ chronos-db supports flexible collection mapping with automatic indexing:
 
 ```typescript
 // Option 1: No collection map - all properties are automatically indexed
-const udm = initUnifiedDataManager({
+const chronos = initChronos({
   mongoUris: ['mongodb://localhost:27017'],
   localStorage: { enabled: true, basePath: './data' },
   // No collectionMaps defined - all properties are indexed automatically
 });
 
 // Option 2: Explicit collection map for specific collections
-const udm = initUnifiedDataManager({
+const chronos = initChronos({
   mongoUris: ['mongodb://localhost:27017'],
   localStorage: { enabled: true, basePath: './data' },
   collectionMaps: {
@@ -400,7 +485,7 @@ Comprehensive admin tools for production management:
 
 ```typescript
 // Test S3 connectivity
-const connectivity = await udm.admin.testS3Connectivity({
+const connectivity = await chronos.admin.testS3Connectivity({
   dbName: 'myapp',
   collection: 'users'
 });
@@ -412,7 +497,7 @@ if (connectivity.success) {
 }
 
 // Validate DigitalOcean Spaces configuration
-const validation = await udm.admin.validateSpacesConfiguration({
+const validation = await chronos.admin.validateSpacesConfiguration({
   dbName: 'myapp',
   collection: 'users'
 });
@@ -423,7 +508,7 @@ if (!validation.valid) {
 }
 
 // Ensure required buckets exist (with auto-creation)
-const bucketResult = await udm.admin.ensureBucketsExist(
+const bucketResult = await chronos.admin.ensureBucketsExist(
   { dbName: 'myapp', collection: 'users' },
   {
     confirm: true,
@@ -436,7 +521,7 @@ console.log(`Checked ${bucketResult.bucketsChecked} buckets`);
 console.log(`Created ${bucketResult.bucketsCreated} buckets`);
 
 // State management for TTL processing
-const stateResult = await udm.admin.markItemsAsProcessedByTTL(
+const stateResult = await chronos.admin.markItemsAsProcessedByTTL(
   { dbName: 'myapp', collection: 'users' },
   24, // TTL in hours
   { confirm: true, dryRun: false }

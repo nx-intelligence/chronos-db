@@ -58,7 +58,7 @@ export const CollectionMapSchema = z.object({
   }).optional(),
 });
 
-export const UdmConfigSchema = z.object({
+export const ChronosConfigSchema = z.object({
   mongoUris: z.array(z.string().min(1, 'MongoDB URI cannot be empty')).min(1, 'At least one MongoDB URI is required').max(10, 'Maximum 10 MongoDB URIs allowed'),
   spacesConns: z.array(SpacesConnSchema).min(1, 'At least one S3 connection is required').max(10, 'Maximum 10 S3 connections allowed'),
   counters: z.object({ 

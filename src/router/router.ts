@@ -3,7 +3,7 @@ import type { MongoClientOptions } from 'mongodb';
 import { S3Client } from '@aws-sdk/client-s3';
 import type { S3ClientConfig } from '@aws-sdk/client-s3';
 import { pickIndexHRW, generateRoutingKeyFromDSL } from './hash.js';
-import type { SpacesConnConfig, LocalStorageConfig } from '../config.js';
+import type { SpacesConnConfig, LocalStorageConfig, DatabaseTypesConfig, DatabaseConnection } from '../config.js';
 import { LocalStorageAdapter } from '../storage/localStorage.js';
 import { S3StorageAdapter } from '../storage/s3Adapter.js';
 import type { StorageAdapter } from '../storage/interface.js';
@@ -19,6 +19,12 @@ export interface RouteContext {
   objectId?: string;
   tenantId?: string;
   forcedIndex?: number; // admin override for migrations/debug
+  
+  // Enhanced multi-tenant routing
+  key?: string; // Direct key for enhanced routing
+  databaseType?: 'metadata' | 'knowledge' | 'runtime';
+  tier?: 'generic' | 'domain' | 'tenant';
+  extIdentifier?: string; // External identifier for mapping
 }
 
 export interface RouterInitArgs {
@@ -27,6 +33,9 @@ export interface RouterInitArgs {
   localStorage?: LocalStorageConfig | undefined; // optional filesystem storage for dev/test
   hashAlgo?: 'rendezvous' | 'jump'; // default "rendezvous"
   chooseKey?: string | ((ctx: RouteContext) => string); // default: tenantId ?? dbName ?? collection+":"+objectId
+  
+  // Enhanced multi-tenant configuration
+  databaseTypes?: DatabaseTypesConfig;
 }
 
 export interface BackendInfo {
@@ -50,6 +59,7 @@ export class BridgeRouter {
   private readonly hashAlgo: 'rendezvous' | 'jump';
   private readonly chooseKey: string | ((ctx: RouteContext) => string);
   private readonly backendIds: string[];
+  private readonly databaseTypes: DatabaseTypesConfig | undefined;
   
   // Connection pools (lazy initialization)
   private mongoClients: Map<number, MongoClient> = new Map();
@@ -76,6 +86,7 @@ export class BridgeRouter {
       : null;
     this.hashAlgo = args.hashAlgo ?? 'rendezvous';
     this.chooseKey = args.chooseKey ?? 'tenantId|dbName|collection:objectId';
+    this.databaseTypes = args.databaseTypes;
     
     logger.debug('BridgeRouter configuration set', {
       mongoUrisCount: this.mongoUris.length,
@@ -193,6 +204,100 @@ export class BridgeRouter {
   }
 
   /**
+   * Resolve database connection by key (enhanced multi-tenant routing)
+   * @param ctx - Routing context with key or databaseType/tier/extIdentifier
+   * @returns Database connection info
+   */
+  private resolveDatabaseConnection(ctx: RouteContext): { mongoUri: string; dbName: string } | null {
+    if (!this.databaseTypes) {
+      return null; // Fall back to legacy routing
+    }
+
+    // Direct key lookup
+    if (ctx.key) {
+      return this.findConnectionByKey(ctx.key);
+    }
+
+    // Resolve by databaseType/tier/extIdentifier
+    if (ctx.databaseType && ctx.tier) {
+      const dbType = this.databaseTypes[ctx.databaseType];
+      if (!dbType) {
+        return null;
+      }
+
+      if (ctx.tier === 'generic') {
+        return {
+          mongoUri: dbType.generic.mongoUri,
+          dbName: dbType.generic.dbName
+        };
+      }
+
+      if (ctx.tier === 'domain' && ctx.extIdentifier) {
+        const domain = dbType.domains.find(d => d.extIdentifier === ctx.extIdentifier);
+        if (domain) {
+          return {
+            mongoUri: domain.mongoUri,
+            dbName: domain.dbName
+          };
+        }
+      }
+
+      if (ctx.tier === 'tenant' && ctx.extIdentifier) {
+        const tenant = dbType.tenants.find(t => t.extIdentifier === ctx.extIdentifier);
+        if (tenant) {
+          return {
+            mongoUri: tenant.mongoUri,
+            dbName: tenant.dbName
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Find database connection by key across all database types
+   * @param key - Unique key to search for
+   * @returns Database connection info or null
+   */
+  private findConnectionByKey(key: string): { mongoUri: string; dbName: string } | null {
+    if (!this.databaseTypes) {
+      return null;
+    }
+
+    for (const dbType of Object.values(this.databaseTypes)) {
+      // Check generic
+      if (dbType.generic.key === key) {
+        return {
+          mongoUri: dbType.generic.mongoUri,
+          dbName: dbType.generic.dbName
+        };
+      }
+
+      // Check domains
+      const domain = dbType.domains.find((d: DatabaseConnection) => d.key === key);
+      if (domain) {
+        return {
+          mongoUri: domain.mongoUri,
+          dbName: domain.dbName
+        };
+      }
+
+      // Check tenants
+      const tenant = dbType.tenants.find((t: DatabaseConnection) => t.key === key);
+      if (tenant) {
+        return {
+          mongoUri: tenant.mongoUri,
+          dbName: tenant.dbName
+        };
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Route a request to determine which backend to use
    * @param ctx - Routing context
    * @returns Backend index (0-based)
@@ -210,6 +315,18 @@ export class BridgeRouter {
       return ctx.forcedIndex;
     }
     
+    // Enhanced multi-tenant routing
+    const dbConnection = this.resolveDatabaseConnection(ctx);
+    if (dbConnection) {
+      // Find the backend index for this specific MongoDB URI
+      const index = this.mongoUris.findIndex(uri => uri === dbConnection.mongoUri);
+      if (index !== -1) {
+        return index;
+      }
+      // If URI not found in mongoUris, fall back to legacy routing
+    }
+    
+    // Legacy routing fallback
     const key = this.generateKey(ctx);
     
     if (this.hashAlgo === 'jump') {
@@ -406,6 +523,7 @@ export class BridgeRouter {
     index: number;
     backend: BackendInfo;
     routingKey: string;
+    resolvedDbName?: string; // Enhanced: resolved database name
   } {
     const index = this.routeIndex(ctx);
     const backends = this.listBackends();
@@ -415,12 +533,17 @@ export class BridgeRouter {
     }
     const routingKey = this.generateKey(ctx);
     
+    // Enhanced: Resolve database name if using enhanced routing
+    const dbConnection = this.resolveDatabaseConnection(ctx);
+    const resolvedDbName = dbConnection?.dbName || ctx.dbName;
+    
     // VERBOSE: Log routing decision details
     logger.routingDecision('getRouteInfo', {
       ctx,
       index,
       backend,
       routingKey,
+      resolvedDbName,
       availableBackends: backends.length
     });
     
@@ -428,6 +551,7 @@ export class BridgeRouter {
       index,
       backend,
       routingKey,
+      resolvedDbName,
     };
   }
 

@@ -1,4 +1,4 @@
-import { validateUdmConfig, validateTransactionConfig, type UdmConfig, type RouteContext } from './config.js';
+import { validateChronosConfig, validateTransactionConfig, type EnhancedChronosConfig, type RouteContext } from './config.js';
 import { setGlobalConfig } from './config/global.js';
 import { logger } from './utils/logger.js';
 import { BridgeRouter } from './router/router.js';
@@ -24,7 +24,7 @@ export type { FallbackResult } from './fallback/wrapper.js';
 /**
  * Main interface for the Unified Data Manager
  */
-export interface Udm {
+export interface Chronos {
   /**
    * Route a request to determine which backend to use
    * @param ctx - Routing context
@@ -476,7 +476,7 @@ export interface PruneResult {
  * @returns Udm instance
  * @throws Error if configuration is invalid
  */
-export function initUnifiedDataManager(config: UdmConfig): Udm {
+export function initChronos(config: EnhancedChronosConfig): Chronos {
   const startTime = Date.now();
   logger.info('Initializing chronos-db', {
     version: '1.1.5',
@@ -487,7 +487,7 @@ export function initUnifiedDataManager(config: UdmConfig): Udm {
   });
   
   // Validate configuration
-  const validatedConfig = validateUdmConfig(config);
+  const validatedConfig = validateChronosConfig(config);
   
   // Validate transaction configuration (async, but we'll handle it in background)
   validateTransactionConfig(validatedConfig).catch(error => {
@@ -507,6 +507,7 @@ export function initUnifiedDataManager(config: UdmConfig): Udm {
     ...(config.localStorage && { localStorage: config.localStorage }),
     hashAlgo: config.routing.hashAlgo,
     chooseKey: config.routing.chooseKey ?? 'tenantId|dbName|collection:objectId',
+    ...(config.databaseTypes && { databaseTypes: config.databaseTypes }), // Enhanced multi-tenant support
   });
   logger.debug('BridgeRouter initialized successfully');
 
@@ -850,7 +851,7 @@ export * from './service/enrich.js';
 
 // Re-export main types for convenience
 export type {
-  UdmConfig,
+  EnhancedChronosConfig,
   RouteContext,
   VersionSpec,
   SpacesConnConfig,

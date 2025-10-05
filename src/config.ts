@@ -19,7 +19,7 @@ export interface LocalStorageConfig {
 /**
  * Main configuration interface for the unified data manager
  */
-export interface UdmConfig {
+export interface ChronosConfig {
   /** 1-10 MongoDB connection URIs */
   mongoUris: string[];
   /** 1-10 S3-compatible storage connections (optional if using localStorage) */
@@ -48,6 +48,38 @@ export interface UdmConfig {
   writeOptimization?: WriteOptimizationConfig | undefined;
   /** Transaction configuration */
   transactions?: TransactionConfig | undefined;
+}
+
+// ============================================================================
+// Enhanced Multi-Tenant Configuration Types
+// ============================================================================
+
+export interface DatabaseConnection {
+  key: string;
+  mongoUri: string;
+  dbName: string;
+  extIdentifier?: string; // Optional external identifier for mapping
+}
+
+export interface DatabaseTypeConfig {
+  generic: DatabaseConnection;
+  domains: DatabaseConnection[];
+  tenants: DatabaseConnection[];
+}
+
+export interface DatabaseTypesConfig {
+  metadata?: DatabaseTypeConfig;
+  knowledge?: DatabaseTypeConfig;
+  runtime?: DatabaseTypeConfig;
+}
+
+// ============================================================================
+// Enhanced ChronosConfig with Multi-Tenant Support
+// ============================================================================
+
+export interface EnhancedChronosConfig extends ChronosConfig {
+  /** Enhanced multi-tenant database configuration */
+  databaseTypes?: DatabaseTypesConfig;
 }
 
 /**
@@ -399,7 +431,7 @@ const localStorageConfigSchema = z.object({
   enabled: z.boolean(),
 });
 
-const udmConfigSchema = z.object({
+const chronosConfigSchema = z.object({
   mongoUris: z.array(z.string().url('Invalid MongoDB URI'))
     .min(1, 'At least one MongoDB URI is required')
     .max(10, 'Maximum 10 MongoDB URIs allowed'),
@@ -481,7 +513,7 @@ const udmConfigSchema = z.object({
  * @param config - Configuration to validate
  * @throws Error if transaction configuration is invalid
  */
-export async function validateTransactionConfig(config: Partial<UdmConfig>): Promise<void> {
+export async function validateTransactionConfig(config: Partial<ChronosConfig>): Promise<void> {
   logger.debug('Starting transaction configuration validation', {
     transactionsEnabled: config.transactions?.enabled,
     autoDetect: config.transactions?.autoDetect,
@@ -525,11 +557,11 @@ export async function validateTransactionConfig(config: Partial<UdmConfig>): Pro
   });
 }
 
-export function validateUdmConfig(config: unknown): UdmConfig {
+export function validateChronosConfig(config: unknown): ChronosConfig {
   logger.debug('Starting UDM configuration validation');
   
   try {
-    const validated = udmConfigSchema.parse(config);
+    const validated = chronosConfigSchema.parse(config);
     const resolved = resolveConfigDefaults(validated);
     
     logger.debug('UDM configuration validation completed successfully', {
@@ -552,14 +584,14 @@ export function validateUdmConfig(config: unknown): UdmConfig {
  * @param config - Configuration object to validate
  * @returns Validation result with success flag and data/error
  */
-export function safeValidateUdmConfig(config: unknown): {
+export function safeValidateChronosConfig(config: unknown): {
   success: true;
-  data: UdmConfig;
+  data: ChronosConfig;
 } | {
   success: false;
   error: z.ZodError;
 } {
-  const result = udmConfigSchema.safeParse(config);
+  const result = chronosConfigSchema.safeParse(config);
   if (result.success) {
     return { success: true, data: resolveConfigDefaults(result.data) };
   } else {
@@ -572,12 +604,12 @@ export function safeValidateUdmConfig(config: unknown): {
 // ============================================================================
 
 /**
- * Type guard to check if an object is a valid UdmConfig
+ * Type guard to check if an object is a valid ChronosConfig
  * @param obj - Object to check
- * @returns True if object is a valid UdmConfig
+ * @returns True if object is a valid ChronosConfig
  */
-export function isUdmConfig(obj: unknown): obj is UdmConfig {
-  return udmConfigSchema.safeParse(obj).success;
+export function isChronosConfig(obj: unknown): obj is ChronosConfig {
+  return chronosConfigSchema.safeParse(obj).success;
 }
 
 /**
@@ -682,11 +714,11 @@ export function resolveTransactionDefaults(config?: TransactionConfig): Transact
 /**
  * Resolves complete configuration with defaults applied
  */
-export function resolveConfigDefaults(config: Partial<UdmConfig>): UdmConfig {
+export function resolveConfigDefaults(config: Partial<ChronosConfig>): ChronosConfig {
   return {
     ...config,
     retention: resolveRetentionDefaults(config.retention),
     rollup: resolveRollupDefaults(config.rollup),
     transactions: resolveTransactionDefaults(config.transactions),
-  } as UdmConfig;
+  } as ChronosConfig;
 }
