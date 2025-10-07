@@ -1,7 +1,7 @@
 {
   "name": "chronos-db",
-  "version": "1.5.5",
-  "description": "Chronos - MongoDB-like persistence layer with time-travel versioning, S3/local storage, enrichment API, and lineage tracking. Works with MongoDB only or MongoDB + S3.",
+  "version": "1.5.6",
+  "description": "Chronos-DB: Enterprise-grade MongoDB persistence layer with embedded multi-tenancy, tiered architecture, and big data capabilities. Features time-travel versioning, S3/local storage, enrichment API, and lineage tracking. Designed for scalable applications requiring tenant isolation, data versioning, and complex data relationships.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
