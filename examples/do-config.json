@@ -1,88 +1,216 @@
 {
-  "mongoConns": [
-    {
-      "key": "mongo-cluster-main",
-      "mongoUri": "mongodb+srv://username:password@cluster-name.mongodb.net?retryWrites=true&w=majority"
-    }
-  ],
-  "databases": {
-    "runtime": [
-      {
-        "key": "runtime-tenant-a",
-        "tenantId": "tenant-a",
-        "mongoConnKey": "mongo-cluster-main",
-        "dbName": "runtime_tenant_a",
-        "spacesConnKey": "do-spaces-nyc3"
-      }
-    ],
-    "logs": {
-      "connection": {
-        "key": "logs-main",
-        "mongoConnKey": "mongo-cluster-main",
-        "dbName": "chronos_logs",
-        "spacesConnKey": "do-spaces-nyc3"
-      }
+  "dbConnections": {
+    "mongo-primary": {
+      "mongoUri": "mongodb+srv://user:pass@primary-cluster.mongodb.net/?retryWrites=true&w=majority"
+    },
+    "mongo-analytics": {
+      "mongoUri": "mongodb+srv://user:pass@analytics-cluster.mongodb.net/?retryWrites=true&w=majority"
     }
   },
-  "spacesConns": [
-    {
-      "key": "do-spaces-nyc3",
+  "spacesConnections": {
+    "do-spaces": {
       "endpoint": "https://nyc3.digitaloceanspaces.com",
       "region": "nyc3",
       "accessKey": "YOUR_DO_SPACES_ACCESS_KEY",
       "secretKey": "YOUR_DO_SPACES_SECRET_KEY",
-      "buckets": {
-        "json": "chronos-json-nyc3",
-        "content": "chronos-content-nyc3",
-        "versions": "chronos-versions-nyc3",
-        "backup": "chronos-backups-nyc3"
-      },
-      "forcePathStyle": false
+      "forcePathStyle": true
+    },
+    "do-spaces-eu": {
+      "endpoint": "https://fra1.digitaloceanspaces.com",
+      "region": "fra1",
+      "accessKey": "YOUR_DO_SPACES_ACCESS_KEY",
+      "secretKey": "YOUR_DO_SPACES_SECRET_KEY",
+      "forcePathStyle": true
     }
-  ],
-  "counters": {
-    "mongoUri": "mongodb+srv://username:password@cluster-name.mongodb.net/counters?retryWrites=true&w=majority",
-    "dbName": "chronos_counters"
+  },
+  "databases": {
+    "metadata": {
+      "genericDatabase": {
+        "dbConnRef": "mongo-primary",
+        "spaceConnRef": "do-spaces",
+        "bucket": "chronos-metadata",
+        "dbName": "chronos_metadata_generic"
+      },
+      "domainsDatabases": [
+        {
+          "domain": "ecommerce",
+          "dbConnRef": "mongo-primary",
+          "spaceConnRef": "do-spaces",
+          "bucket": "chronos-metadata-ecommerce",
+          "dbName": "chronos_metadata_ecommerce"
+        }
+      ],
+      "tenantDatabases": [
+        {
+          "tenantId": "store-a",
+          "dbConnRef": "mongo-primary",
+          "spaceConnRef": "do-spaces",
+          "bucket": "chronos-metadata-store-a",
+          "dbName": "chronos_metadata_store_a"
+        },
+        {
+          "tenantId": "store-b",
+          "dbConnRef": "mongo-primary",
+          "spaceConnRef": "do-spaces-eu",
+          "bucket": "chronos-metadata-store-b",
+          "dbName": "chronos_metadata_store_b"
+        }
+      ]
+    },
+    "knowledge": {
+      "genericDatabase": {
+        "dbConnRef": "mongo-primary",
+        "spaceConnRef": "do-spaces",
+        "bucket": "chronos-knowledge",
+        "dbName": "chronos_knowledge_generic"
+      },
+      "domainsDatabases": [
+        {
+          "domain": "ecommerce",
+          "dbConnRef": "mongo-primary",
+          "spaceConnRef": "do-spaces",
+          "bucket": "chronos-knowledge-ecommerce",
+          "dbName": "chronos_knowledge_ecommerce"
+        }
+      ],
+      "tenantDatabases": [
+        {
+          "tenantId": "store-a",
+          "dbConnRef": "mongo-primary",
+          "spaceConnRef": "do-spaces",
+          "bucket": "chronos-knowledge-store-a",
+          "dbName": "chronos_knowledge_store_a"
+        },
+        {
+          "tenantId": "store-b",
+          "dbConnRef": "mongo-primary",
+          "spaceConnRef": "do-spaces-eu",
+          "bucket": "chronos-knowledge-store-b",
+          "dbName": "chronos_knowledge_store_b"
+        }
+      ]
+    },
+    "runtime": {
+      "tenantDatabases": [
+        {
+          "tenantId": "store-a",
+          "dbConnRef": "mongo-primary",
+          "spaceConnRef": "do-spaces",
+          "bucket": "chronos-runtime-store-a",
+          "dbName": "chronos_runtime_store_a",
+          "analyticsDbName": "chronos_analytics_store_a"
+        },
+        {
+          "tenantId": "store-b",
+          "dbConnRef": "mongo-primary",
+          "spaceConnRef": "do-spaces-eu",
+          "bucket": "chronos-runtime-store-b",
+          "dbName": "chronos_runtime_store_b",
+          "analyticsDbName": "chronos_analytics_store_b"
+        }
+      ]
+    },
+    "logs": {
+      "dbConnRef": "mongo-primary",
+      "spaceConnRef": "do-spaces",
+      "bucket": "chronos-logs",
+      "dbName": "chronos_logs"
+    }
   },
   "routing": {
     "hashAlgo": "rendezvous",
-    "chooseKey": "tenantId|dbName"
+    "chooseKey": "tenantId|dbName|collection:objectId"
   },
   "retention": {
-    "ver": { "days": 45, "maxPerItem": 20 },
-    "counters": { "days": 365, "weeks": 104, "months": 48 }
-  },
-  "rollup": {
-    "enabled": true,
-    "manifestPeriod": "daily"
+    "ver": {
+      "days": 60,
+      "maxPerItem": 500
+    },
+    "counters": {
+      "days": 30,
+      "weeks": 8,
+      "months": 6
+    }
   },
   "collectionMaps": {
-    "documents": {
-      "indexedProps": ["clientId", "docType", "country"],
-      "base64Props": { 
-        "content": { 
-          "contentType": "application/pdf",
+    "products": {
+      "indexedProps": ["sku", "tenantId", "category", "price", "status"],
+      "base64Props": {
+        "image": {
+          "contentType": "image/jpeg",
           "preferredText": false
-        } 
+        },
+        "description": {
+          "contentType": "text/html",
+          "preferredText": true,
+          "textCharset": "utf-8"
+        }
       },
-      "validation": { 
-        "requiredIndexed": ["clientId", "docType"] 
+      "validation": {
+        "requiredIndexed": ["sku", "tenantId"]
       }
     },
-    "profiles": {
-      "indexedProps": ["customerId", "preferences.language", "preferences.notifications"],
-      "base64Props": { 
-        "avatar": { 
-          "contentType": "image/png",
-          "preferredText": false
-        } 
+    "orders": {
+      "indexedProps": ["orderId", "customerId", "tenantId", "status", "total", "createdAt"],
+      "validation": {
+        "requiredIndexed": ["orderId", "customerId", "tenantId"]
+      }
+    },
+    "customers": {
+      "indexedProps": ["email", "tenantId", "status", "createdAt"],
+      "validation": {
+        "requiredIndexed": ["email", "tenantId"]
+      }
+    },
+    "inventory": {
+      "indexedProps": ["sku", "tenantId", "quantity", "location"],
+      "validation": {
+        "requiredIndexed": ["sku", "tenantId"]
       }
     }
   },
+  "counterRules": {
+    "rules": [
+      {
+        "name": "product_created",
+        "on": ["CREATE"],
+        "scope": "meta",
+        "when": {
+          "collection": "products"
+        }
+      },
+      {
+        "name": "order_created",
+        "on": ["CREATE"],
+        "scope": "meta",
+        "when": {
+          "collection": "orders"
+        }
+      },
+      {
+        "name": "order_completed",
+        "on": ["UPDATE"],
+        "scope": "payload",
+        "when": {
+          "collection": "orders",
+          "payload.status": "completed"
+        }
+      },
+      {
+        "name": "inventory_updated",
+        "on": ["UPDATE"],
+        "scope": "payload",
+        "when": {
+          "collection": "inventory",
+          "payload.quantity": { "$exists": true }
+        }
+      }
+    ]
+  },
   "devShadow": {
     "enabled": true,
-    "ttlHours": 24,
-    "maxBytesPerDoc": 1048576
+    "ttlHours": 12,
+    "maxBytesPerDoc": 524288
   },
   "logicalDelete": {
     "enabled": true
@@ -90,11 +218,16 @@
   "versioning": {
     "enabled": true
   },
+  "writeOptimization": {
+    "batchSize": 500,
+    "debounceMs": 200,
+    "compressionEnabled": true
+  },
   "fallback": {
     "enabled": true,
-    "maxRetries": 3,
-    "retryDelayMs": 1000,
-    "maxDelayMs": 60000,
+    "maxRetries": 5,
+    "retryDelayMs": 2000,
+    "maxDelayMs": 120000,
     "deadLetterCollection": "chronos_fallback_dead"
   },
   "transactions": {

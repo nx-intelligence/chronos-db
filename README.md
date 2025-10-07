@@ -1,4 +1,4 @@
-# Chronos-DB 🚀
+# Chronos-DB v2.0 🚀
 
 > **Enterprise-Grade MongoDB Persistence Layer with Embedded Multi-Tenancy & Big Data Architecture**
 
@@ -9,9 +9,9 @@
 
 ---
 
-## 🎯 **Built for Big Data & Enterprise**
+## 🎯 **Built for Enterprise & Big Data**
 
-Chronos-DB is designed for **large-scale applications** requiring **tenant isolation**, **data versioning**, and **complex data relationships**. Built with **embedded multi-tenancy by design** and **tiered architecture** to handle big data workloads efficiently.
+Chronos-DB v2.0 is designed for **large-scale enterprise applications** requiring **tenant isolation**, **data versioning**, and **complex data relationships**. Built with **embedded multi-tenancy by design** and **tiered architecture** to handle big data workloads efficiently while maintaining **enterprise-grade security and compliance**.
 
 ### 🏢 **Enterprise Features**
 
@@ -21,12 +21,13 @@ Chronos-DB is designed for **large-scale applications** requiring **tenant isola
 - **🔄 Time-Travel Queries**: Full historical data access and point-in-time recovery
 - **🔒 Enterprise Security**: Row-level security with tenant-based data isolation
 - **📈 Scalable Design**: Horizontal scaling across multiple MongoDB clusters
+- **🛡️ Compliance Ready**: Built-in audit trails, data lineage, and regulatory compliance features
 
 ---
 
-## 📖 Overview
+## 📖 **Architecture Overview**
 
-`chronos-db` provides a production-ready persistence layer designed for **enterprise applications** and **big data projects** that combines:
+Chronos-DB v2.0 provides a production-ready persistence layer designed for **enterprise applications** and **big data projects** that combines:
 
 - **🏢 Multi-Tenant Architecture**: Built-in tenant isolation with configurable database tiers (metadata, knowledge, runtime, logs)
 - **📊 MongoDB** for indexed metadata, head pointers, and bounded recent version index
@@ -36,12 +37,12 @@ Chronos-DB is designed for **large-scale applications** requiring **tenant isola
 - **🔒 Transaction locking** for concurrent write prevention across multiple servers
 - **📈 Big Data Optimization**: Efficient handling of large datasets with S3 integration
 - **🎯 Tenant Isolation**: Row-level security with configurable tenant boundaries
-- **Cheap analytics** with conditional counters
-- **Enrichment API** for incremental updates
-- **Fallback queues** for guaranteed durability
-- **Write optimization** for high-throughput scenarios
+- **📊 Integrated Analytics**: Built-in counters and metrics for business intelligence
+- **🔧 Enrichment API** for incremental updates
+- **🔄 Fallback queues** for guaranteed durability
+- **⚡ Write optimization** for high-throughput scenarios
 
-### Key Principles
+### **Key Principles**
 
 ✅ **No Environment Variables** - All configuration via JSON  
 ✅ **Cost-First** - Minimize storage and compute costs  
@@ -49,129 +50,499 @@ Chronos-DB is designed for **large-scale applications** requiring **tenant isola
 ✅ **Concurrent-Safe** - Transaction locking prevents multi-server write conflicts  
 ✅ **Portable** - Works with any S3-compatible provider  
 ✅ **Type-Safe** - Full TypeScript support with Zod validation  
+✅ **Security-First** - Built-in tenant isolation and data protection  
+✅ **Compliance-Ready** - Audit trails, data lineage, and regulatory features  
 
 ---
 
-## 🏢 **Multi-Tenant Architecture & Big Data Use Cases**
+## 🏢 **Multi-Tenant Architecture & Security**
 
-### **Perfect for Enterprise Applications**
+### **🔒 Security-First Design**
 
-Chronos-DB is specifically designed for **large-scale, multi-tenant applications** that need to handle:
+Chronos-DB v2.0 implements **enterprise-grade security** with multiple layers of protection:
 
-- **🏢 SaaS Platforms**: Multi-tenant applications with strict data isolation
-- **📊 Analytics Platforms**: Big data processing with time-series analysis
-- **🔄 E-commerce Systems**: High-volume transaction processing with audit trails
-- **📈 Financial Services**: Regulatory compliance with full data lineage
-- **🎯 CRM Systems**: Customer data management with relationship tracking
-- **📱 IoT Platforms**: Massive data ingestion with historical analysis
+#### **1. Tenant Isolation**
+- **Complete Data Separation**: Each tenant's data is stored in separate databases
+- **Network-Level Isolation**: Different MongoDB clusters per tenant (optional)
+- **Storage Isolation**: Separate S3 buckets or prefixes per tenant
+- **Access Control**: Tenant-based routing prevents cross-tenant data access
 
-### **Tiered Database Architecture**
+#### **2. Row-Level Security**
+- **Tenant Context**: Every operation requires explicit tenant context
+- **Automatic Filtering**: Queries automatically filter by tenant
+- **Audit Trails**: All operations logged with tenant information
+- **Data Lineage**: Complete tracking of data flow and transformations
 
-Chronos-DB uses a **sophisticated tiered approach** to optimize for different data types:
+#### **3. Compliance Features**
+- **GDPR Compliance**: Built-in data deletion and anonymization
+- **SOX Compliance**: Immutable audit trails and data integrity
+- **HIPAA Compliance**: Encrypted data storage and access controls
+- **SOC 2**: Comprehensive logging and monitoring capabilities
+
+### **🏗️ Tiered Database Architecture**
+
+Chronos-DB uses a **sophisticated tiered approach** to optimize for different data types and security requirements:
 
 ```typescript
-// Multi-tier database configuration
+// Multi-tier database configuration with security considerations
 databases: {
-  metadata: [    // System metadata, configurations, schemas
-    { key: 'meta-prod', tenantId: 'system', dbName: 'chronos_metadata' }
-  ],
-  knowledge: [   // Reference data, lookups, master data
-    { key: 'knowledge-prod', tenantId: 'shared', dbName: 'chronos_knowledge' }
-  ],
-  runtime: [     // Transactional data, user records, business data
-    { key: 'runtime-tenant-a', tenantId: 'tenant-a', dbName: 'tenant_a_data' },
-    { key: 'runtime-tenant-b', tenantId: 'tenant-b', dbName: 'tenant_b_data' }
-  ],
-  logs: {        // System logs, audit trails, monitoring
-    connection: { key: 'logs-prod', dbName: 'chronos_logs' }
+  metadata: {
+    genericDatabase: {     // System-wide metadata (no tenant isolation needed)
+      dbConnRef: 'mongo-primary',
+      spaceConnRef: 's3-primary',
+      bucket: 'chronos-metadata',
+      dbName: 'chronos_metadata_generic'
+    },
+    domainsDatabases: [    // Domain-level metadata (shared within domain)
+      {
+        domain: 'healthcare',
+        dbConnRef: 'mongo-healthcare',
+        spaceConnRef: 's3-healthcare',
+        bucket: 'chronos-metadata-healthcare',
+        dbName: 'chronos_metadata_healthcare'
+      }
+    ],
+    tenantDatabases: [    // Tenant-specific metadata (isolated per tenant)
+      {
+        tenantId: 'tenant-a',
+        dbConnRef: 'mongo-tenant-a',
+        spaceConnRef: 's3-tenant-a',
+        bucket: 'chronos-metadata-tenant-a',
+        dbName: 'chronos_metadata_tenant_a'
+      }
+    ]
+  },
+  knowledge: {
+    genericDatabase: {     // Shared knowledge base
+      dbConnRef: 'mongo-primary',
+      spaceConnRef: 's3-primary',
+      bucket: 'chronos-knowledge',
+      dbName: 'chronos_knowledge_generic'
+    },
+    domainsDatabases: [    // Domain-specific knowledge
+      {
+        domain: 'finance',
+        dbConnRef: 'mongo-finance',
+        spaceConnRef: 's3-finance',
+        bucket: 'chronos-knowledge-finance',
+        dbName: 'chronos_knowledge_finance'
+      }
+    ],
+    tenantDatabases: [    // Tenant-specific knowledge
+      {
+        tenantId: 'tenant-b',
+        dbConnRef: 'mongo-tenant-b',
+        spaceConnRef: 's3-tenant-b',
+        bucket: 'chronos-knowledge-tenant-b',
+        dbName: 'chronos_knowledge_tenant_b'
+      }
+    ]
+  },
+  runtime: {
+    tenantDatabases: [    // Runtime data (always tenant-isolated)
+      {
+        tenantId: 'tenant-a',
+        dbConnRef: 'mongo-tenant-a',
+        spaceConnRef: 's3-tenant-a',
+        bucket: 'chronos-runtime-tenant-a',
+        dbName: 'chronos_runtime_tenant_a',
+        analyticsDbName: 'chronos_analytics_tenant_a'  // Integrated analytics
+      }
+    ]
+  },
+  logs: {                 // System logs (centralized)
+    dbConnRef: 'mongo-logs',
+    spaceConnRef: 's3-logs',
+    bucket: 'chronos-logs',
+    dbName: 'chronos_logs'
   }
 }
 ```
 
-### **Embedded Multi-Tenancy Benefits**
+### **🔐 Security Best Practices**
 
-- **🔒 Data Isolation**: Each tenant's data is completely isolated
-- **📈 Horizontal Scaling**: Scale tenants independently across database clusters
-- **💰 Cost Optimization**: Efficient resource utilization per tenant
-- **🛡️ Security**: Row-level security with tenant-based access control
-- **⚡ Performance**: Optimized queries with tenant-specific routing
+#### **1. Connection Reuse & Security**
+```typescript
+// Define connections once, reference everywhere (95% reuse as requested)
+dbConnections: {
+  'mongo-primary': {
+    mongoUri: 'mongodb+srv://user:pass@primary-cluster.mongodb.net/?retryWrites=true&w=majority'
+  },
+  'mongo-tenant-a': {
+    mongoUri: 'mongodb+srv://user:pass@tenant-a-cluster.mongodb.net/?retryWrites=true&w=majority'
+  },
+  'mongo-analytics': {
+    mongoUri: 'mongodb+srv://user:pass@analytics-cluster.mongodb.net/?retryWrites=true&w=majority'
+  }
+},
+spacesConnections: {
+  's3-primary': {
+    endpoint: 'https://s3.amazonaws.com',
+    region: 'us-east-1',
+    accessKey: process.env.AWS_ACCESS_KEY_ID,
+    secretKey: process.env.AWS_SECRET_ACCESS_KEY
+  },
+  's3-tenant-a': {
+    endpoint: 'https://tenant-a-bucket.s3.amazonaws.com',
+    region: 'us-east-1',
+    accessKey: process.env.TENANT_A_ACCESS_KEY,
+    secretKey: process.env.TENANT_A_SECRET_KEY
+  }
+}
+```
+
+#### **2. Tenant Isolation Strategies**
+
+**Option A: Complete Isolation (Highest Security)**
+```typescript
+// Each tenant gets separate MongoDB cluster and S3 bucket
+tenantDatabases: [
+  {
+    tenantId: 'tenant-a',
+    dbConnRef: 'mongo-tenant-a',      // Separate MongoDB cluster
+    spaceConnRef: 's3-tenant-a',      // Separate S3 bucket
+    bucket: 'chronos-tenant-a',
+    dbName: 'chronos_tenant_a',
+    analyticsDbName: 'chronos_analytics_tenant_a'
+  }
+]
+```
+
+**Option B: Shared Infrastructure (Cost-Effective)**
+```typescript
+// Multiple tenants share infrastructure but with strict isolation
+tenantDatabases: [
+  {
+    tenantId: 'tenant-a',
+    dbConnRef: 'mongo-shared',        // Shared MongoDB cluster
+    spaceConnRef: 's3-shared',       // Shared S3 bucket
+    bucket: 'chronos-shared',
+    dbName: 'chronos_tenant_a',       // Separate database per tenant
+    analyticsDbName: 'chronos_analytics_tenant_a'
+  }
+]
+```
+
+#### **3. Compliance Configuration**
+
+**GDPR Compliance**
+```typescript
+// Enable logical delete for GDPR compliance
+logicalDelete: {
+  enabled: true  // Default - enables data recovery and audit trails
+},
+
+// Enable versioning for data lineage
+versioning: {
+  enabled: true  // Default - enables time-travel queries and audit trails
+}
+```
+
+**SOX Compliance**
+```typescript
+// Enable comprehensive audit trails
+collectionMaps: {
+  financial_records: {
+    indexedProps: ['accountId', 'transactionId', 'amount', 'date'],
+    validation: {
+      requiredIndexed: ['accountId', 'transactionId', 'amount']
+    }
+  }
+},
+
+// Enable transaction logging
+transactions: {
+  enabled: true,
+  autoDetect: true
+}
+```
 
 ---
 
-## 🚀 Quick Start
+## 📊 **Big Data Architecture & Performance**
 
-### Installation
+### **🚀 Big Data Optimization**
 
-```bash
-npm install chronos-db
+Chronos-DB v2.0 is specifically designed for **big data scenarios** with enterprise-grade performance:
+
+#### **1. Horizontal Scaling**
+```typescript
+// Distribute load across multiple MongoDB clusters
+dbConnections: {
+  'mongo-cluster-1': { mongoUri: 'mongodb://cluster-1:27017' },
+  'mongo-cluster-2': { mongoUri: 'mongodb://cluster-2:27017' },
+  'mongo-cluster-3': { mongoUri: 'mongodb://cluster-3:27017' }
+},
+
+// S3 storage across multiple regions
+spacesConnections: {
+  's3-us-east': {
+    endpoint: 'https://s3.us-east-1.amazonaws.com',
+    region: 'us-east-1'
+  },
+  's3-eu-west': {
+    endpoint: 'https://s3.eu-west-1.amazonaws.com',
+    region: 'eu-west-1'
+  }
+}
 ```
 
-### Multi-Tenant Enterprise Setup
+#### **2. High-Throughput Operations**
+```typescript
+// Optimized for millions of operations per day
+const chronos = initChronos({
+  // ... configuration
+  writeOptimization: {
+    batchSize: 1000,           // Batch S3 operations
+    debounceMs: 100,          // Debounce counter updates
+    compressionEnabled: true   // Compress large payloads
+  },
+  
+  // Fallback queues for guaranteed durability
+  fallback: {
+    enabled: true,
+    maxRetries: 3,
+    retryDelayMs: 1000,
+    maxDelayMs: 60000
+  }
+});
+```
+
+#### **3. Analytics Integration**
+```typescript
+// Built-in analytics for each tenant
+runtime: {
+  tenantDatabases: [
+    {
+      tenantId: 'tenant-a',
+      dbConnRef: 'mongo-tenant-a',
+      spaceConnRef: 's3-tenant-a',
+      bucket: 'chronos-runtime-tenant-a',
+      dbName: 'chronos_runtime_tenant_a',
+      analyticsDbName: 'chronos_analytics_tenant_a'  // Integrated analytics
+    }
+  ]
+}
+```
+
+### **📈 Big Data Use Cases**
+
+#### **1. IoT Data Ingestion**
+```typescript
+// High-volume IoT data processing
+const iotOps = chronos.with({
+  databaseType: 'runtime',
+  tier: 'tenant',
+  tenantId: 'iot-platform',
+  collection: 'sensor-data'
+});
+
+// Batch processing for millions of sensor readings
+const batchSize = 10000;
+const sensorData = Array.from({ length: batchSize }, (_, i) => ({
+  deviceId: `sensor-${i % 1000}`,
+  timestamp: new Date(),
+  temperature: Math.random() * 100,
+  humidity: Math.random() * 100,
+  location: { lat: Math.random() * 90, lng: Math.random() * 180 }
+}));
+
+// Efficient batch insertion
+for (let i = 0; i < sensorData.length; i += 100) {
+  const batch = sensorData.slice(i, i + 100);
+  await Promise.all(batch.map(data => 
+    iotOps.create(data, 'iot-ingestion', 'sensor-data')
+  ));
+}
+```
+
+#### **2. Financial Transaction Processing**
+```typescript
+// High-frequency trading data
+const tradingOps = chronos.with({
+  databaseType: 'runtime',
+  tier: 'tenant',
+  tenantId: 'trading-firm',
+  collection: 'transactions'
+});
+
+// Process thousands of transactions per second
+const processTransaction = async (transaction) => {
+  const result = await tradingOps.create({
+    symbol: transaction.symbol,
+    price: transaction.price,
+    quantity: transaction.quantity,
+    timestamp: transaction.timestamp,
+    traderId: transaction.traderId
+  }, 'trading-system', 'market-transaction');
+  
+  // Analytics automatically tracked in analyticsDbName
+  return result;
+};
+```
+
+#### **3. E-commerce Analytics**
+```typescript
+// Multi-tenant e-commerce platform
+const ecommerceOps = chronos.with({
+  databaseType: 'runtime',
+  tier: 'tenant',
+  tenantId: 'ecommerce-store',
+  collection: 'orders'
+});
+
+// Process orders with automatic analytics
+const createOrder = async (orderData) => {
+  const result = await ecommerceOps.create({
+    customerId: orderData.customerId,
+    items: orderData.items,
+    total: orderData.total,
+    status: 'pending'
+  }, 'ecommerce-system', 'order-creation');
+  
+  // Analytics automatically tracked:
+  // - Order count per customer
+  // - Revenue per day/month
+  // - Product popularity
+  // - Customer behavior patterns
+  
+  return result;
+};
+```
+
+### **⚡ Performance Optimizations**
+
+#### **1. Connection Pooling**
+```typescript
+// Efficient MongoDB connection management
+const router = new BridgeRouter({
+  dbConnections: {
+    'mongo-primary': { mongoUri: 'mongodb://primary:27017' }
+  },
+  // ... other config
+});
+
+// Automatic connection pooling per MongoDB URI
+// Reuses connections across operations
+// Handles connection failures gracefully
+```
+
+#### **2. S3 Optimization**
+```typescript
+// Optimized S3 operations
+spacesConnections: {
+  's3-optimized': {
+    endpoint: 'https://s3.amazonaws.com',
+    region: 'us-east-1',
+    // Automatic retry and exponential backoff
+    // Connection pooling for S3 operations
+    // Batch operations for multiple files
+  }
+}
+```
+
+#### **3. Caching Strategy**
+```typescript
+// Dev shadow for frequently accessed data
+devShadow: {
+  enabled: true,
+  ttlHours: 24,              // Cache for 24 hours
+  maxBytesPerDoc: 1024 * 1024 // 1MB max per document
+}
+```
+
+---
+
+## 🚀 **Quick Start**
+
+### **Installation**
+
+```bash
+npm install chronos-db@^2.0.0
+```
+
+### **Enterprise Multi-Tenant Setup**
 
 ```typescript
 import { initChronos } from 'chronos-db';
 
 const chronos = initChronos({
-  // MongoDB connections for different tiers
-  mongoConns: [
-    { key: 'mongo-primary', mongoUri: 'mongodb://primary-cluster:27017' },
-    { key: 'mongo-analytics', mongoUri: 'mongodb://analytics-cluster:27017' }
-  ],
-  
-  // Tiered database architecture
-  databases: {
-    metadata: [{
-      key: 'meta-prod',
-      mongoConnKey: 'mongo-primary',
-      tenantId: 'system',
-      dbName: 'chronos_metadata'
-    }],
-    knowledge: [{
-      key: 'knowledge-prod', 
-      mongoConnKey: 'mongo-primary',
-      tenantId: 'shared',
-      dbName: 'chronos_knowledge'
-    }],
-    runtime: [
-      {
-        key: 'runtime-tenant-a',
-        mongoConnKey: 'mongo-primary',
-        spacesConnKey: 's3-prod',
-        tenantId: 'tenant-a',
-        dbName: 'tenant_a_data'
-      },
-      {
-        key: 'runtime-tenant-b',
-        mongoConnKey: 'mongo-primary', 
-        spacesConnKey: 's3-prod',
-        tenantId: 'tenant-b',
-        dbName: 'tenant_b_data'
-      }
-    ],
-    logs: {
-      connection: {
-        key: 'logs-prod',
-        mongoConnKey: 'mongo-analytics',
-        spacesConnKey: 's3-logs',
-        dbName: 'chronos_logs'
-      }
+  // Connection definitions (95% reuse as requested)
+  dbConnections: {
+    'mongo-primary': {
+      mongoUri: 'mongodb+srv://user:pass@primary-cluster.mongodb.net'
+    },
+    'mongo-analytics': {
+      mongoUri: 'mongodb+srv://user:pass@analytics-cluster.mongodb.net'
     }
   },
   
-  // S3 storage for big data
-  spacesConns: [{
-    key: 's3-prod',
-    endpoint: 'https://s3.amazonaws.com',
-    region: 'us-east-1',
-    accessKey: 'YOUR_ACCESS_KEY',
-    secretKey: 'YOUR_SECRET_KEY',
-    buckets: {
-      json: 'chronos-json-prod',
-      content: 'chronos-content-prod', 
-      versions: 'chronos-versions-prod',
-      backup: 'chronos-backups-prod'
+  spacesConnections: {
+    's3-primary': {
+      endpoint: 'https://s3.amazonaws.com',
+      region: 'us-east-1',
+      accessKey: process.env.AWS_ACCESS_KEY_ID,
+      secretKey: process.env.AWS_SECRET_ACCESS_KEY
     }
-  }],
+  },
+  
+  // Tiered database architecture
+  databases: {
+    metadata: {
+      genericDatabase: {
+        dbConnRef: 'mongo-primary',
+        spaceConnRef: 's3-primary',
+        bucket: 'chronos-metadata',
+        dbName: 'chronos_metadata_generic'
+      },
+      domainsDatabases: [
+        {
+          domain: 'healthcare',
+          dbConnRef: 'mongo-primary',
+          spaceConnRef: 's3-primary',
+          bucket: 'chronos-metadata-healthcare',
+          dbName: 'chronos_metadata_healthcare'
+        }
+      ],
+      tenantDatabases: [
+        {
+          tenantId: 'tenant-a',
+          dbConnRef: 'mongo-primary',
+          spaceConnRef: 's3-primary',
+          bucket: 'chronos-metadata-tenant-a',
+          dbName: 'chronos_metadata_tenant_a'
+        }
+      ]
+    },
+    knowledge: {
+      genericDatabase: {
+        dbConnRef: 'mongo-primary',
+        spaceConnRef: 's3-primary',
+        bucket: 'chronos-knowledge',
+        dbName: 'chronos_knowledge_generic'
+      },
+      domainsDatabases: [],
+      tenantDatabases: []
+    },
+    runtime: {
+      tenantDatabases: [
+        {
+          tenantId: 'tenant-a',
+          dbConnRef: 'mongo-primary',
+          spaceConnRef: 's3-primary',
+          bucket: 'chronos-runtime-tenant-a',
+          dbName: 'chronos_runtime_tenant_a',
+          analyticsDbName: 'chronos_analytics_tenant_a'
+        }
+      ]
+    },
+    logs: {
+      dbConnRef: 'mongo-primary',
+      spaceConnRef: 's3-primary',
+      bucket: 'chronos-logs',
+      dbName: 'chronos_logs'
+    }
+  },
   
   // Enterprise configuration
   routing: { hashAlgo: 'rendezvous' },
@@ -179,190 +550,78 @@ const chronos = initChronos({
   collectionMaps: {
     users: { indexedProps: ['email', 'tenantId'] },
     orders: { indexedProps: ['orderId', 'customerId', 'tenantId'] }
+  },
+  
+  // Security and compliance
+  logicalDelete: { enabled: true },    // GDPR compliance
+  versioning: { enabled: true },       // Audit trails
+  transactions: { enabled: true },     // Data integrity
+  
+  // Performance optimization
+  writeOptimization: {
+    batchSize: 1000,
+    debounceMs: 100
+  },
+  fallback: {
+    enabled: true,
+    maxRetries: 3
   }
 });
 
 // Multi-tenant operations
 const tenantAOps = chronos.with({ 
-  key: 'runtime-tenant-a', 
+  databaseType: 'runtime',
+  tier: 'tenant',
+  tenantId: 'tenant-a',
   collection: 'users' 
 });
 
 const tenantBOps = chronos.with({ 
-  key: 'runtime-tenant-b', 
+  databaseType: 'runtime',
+  tier: 'tenant',
+  tenantId: 'tenant-b',
   collection: 'users' 
 });
 
-// Create users in different tenants
+// Create users in different tenants (completely isolated)
 await tenantAOps.create({ email: 'user@tenant-a.com', name: 'User A' });
 await tenantBOps.create({ email: 'user@tenant-b.com', name: 'User B' });
 ```
 
 ---
 
-## 🏢 Multi-Tenant Usage
+## ⚙️ **Configuration Reference**
 
-For complex multi-tenant architectures with multiple database types and tiers:
-
-```typescript
-import { initChronos } from 'chronos-db';
-
-const chronos = initChronos({
-  mongoConns: [
-    { key: 'mongo-cluster-a', mongoUri: 'mongodb+srv://user:pass@cluster-a.mongodb.net' },
-    { key: 'mongo-cluster-b', mongoUri: 'mongodb+srv://user:pass@cluster-b.mongodb.net' }
-  ],
-  databases: {
-    metadata: [
-      { key: 'meta-domain1', mongoConnKey: 'mongo-cluster-a', spacesConnKey: 'aws-us-east', tenantId: 'domain1', dbName: 'metadata_domain1' },
-      { key: 'meta-tenant-a', mongoConnKey: 'mongo-cluster-b', spacesConnKey: 'aws-us-east', tenantId: 'tenant-a', dbName: 'metadata_tenant_a' }
-    ],
-    knowledge: [
-      { key: 'know-domain1', mongoConnKey: 'mongo-cluster-a', spacesConnKey: 'aws-us-east', tenantId: 'domain1', dbName: 'knowledge_domain1' },
-      { key: 'know-tenant-a', mongoConnKey: 'mongo-cluster-b', spacesConnKey: 'aws-us-east', tenantId: 'tenant-a', dbName: 'knowledge_tenant_a' }
-    ],
-    runtime: [
-      { key: 'runtime-domain1', mongoConnKey: 'mongo-cluster-a', spacesConnKey: 'aws-us-east', tenantId: 'domain1', dbName: 'runtime_domain1' },
-      { key: 'runtime-tenant-a', mongoConnKey: 'mongo-cluster-b', spacesConnKey: 'aws-us-east', tenantId: 'tenant-a', dbName: 'runtime_tenant_a' }
-    ],
-    logs: {
-      connection: { key: 'logs-main', mongoConnKey: 'mongo-cluster-a', spacesConnKey: 'aws-us-east', dbName: 'chronos_logs' }
-    }
-  },
-  spacesConns: [{
-    key: 'aws-us-east',
-    endpoint: 'https://s3.us-east-1.amazonaws.com',
-    region: 'us-east-1',
-    accessKey: 'YOUR_AWS_ACCESS_KEY',
-    secretKey: 'YOUR_AWS_SECRET_KEY',
-    buckets: {
-      json: 'chronos-json-us-east',
-      content: 'chronos-content-us-east',
-      versions: 'chronos-versions-us-east',
-      backup: 'chronos-backups-us-east'
-    }
-  }],
-  counters: { mongoUri: 'mongodb+srv://user:pass@cluster-metrics.mongodb.net', dbName: 'chronos_counters' },
-  routing: { hashAlgo: 'rendezvous' },
-  retention: {},
-  rollup: {},
-});
-
-// Option A: Direct key usage (simplest)
-const ops = chronos.with({
-  key: 'runtime-tenant-a',  // Unique key, automatically resolves everything
-  collection: 'users'
-});
-
-// Option B: Tenant-based routing
-const ops2 = chronos.with({
-  databaseType: 'runtime',
-  tenantId: 'tenant-a',  // Maps to tenant-specific database
-  collection: 'users'
-});
-
-// Option C: Logs database (no tiers)
-const ops3 = chronos.with({
-  key: 'logs-main',
-  collection: 'audit'
-});
-
-await ops.create({ email: 'user@example.com' });
-await ops2.create({ email: 'user2@example.com' });
-await ops3.create({ event: 'user_login', timestamp: new Date() });
-```
-
----
-
-## 📊 **Big Data Capabilities & Performance**
-
-### **Designed for High-Volume Operations**
-
-Chronos-DB is optimized for **big data scenarios** with enterprise-grade performance features:
-
-- **⚡ High-Throughput**: Optimized for millions of operations per day
-- **📈 Horizontal Scaling**: Distribute load across multiple MongoDB clusters
-- **☁️ S3 Integration**: Efficient storage of large datasets and files
-- **🔄 Batch Operations**: Bulk processing with write optimization
-- **📊 Analytics Ready**: Built-in counters and metrics for business intelligence
-- **💾 Cost Optimization**: Intelligent data lifecycle management
-
-### **Big Data Use Cases**
-
-```typescript
-// High-volume data ingestion
-const batchOps = chronos.with({ key: 'runtime-analytics', collection: 'events' });
-
-// Bulk insert for IoT data
-const events = Array.from({ length: 10000 }, (_, i) => ({
-  deviceId: `device-${i}`,
-  timestamp: new Date(),
-  temperature: Math.random() * 100,
-  humidity: Math.random() * 100
-}));
-
-// Batch processing with enrichment
-for (const event of events) {
-  await batchOps.create(event, 'iot-ingestion', 'sensor-data');
-}
-
-// Time-series analysis
-const historicalData = await batchOps.query(
-  { deviceId: 'device-123' },
-  { 
-    at: '2024-01-01T00:00:00Z',
-    sort: { timestamp: 1 },
-    limit: 1000 
-  }
-);
-
-// Analytics with counters
-const metrics = await chronos.counters.getTotals('events', {
-  deviceId: 'device-123',
-  dateRange: { from: '2024-01-01', to: '2024-01-31' }
-});
-```
-
-### **Performance Optimizations**
-
-- **🚀 Write Optimization**: Batch S3 operations and debounced counters
-- **💾 Smart Caching**: Dev shadow for frequently accessed data
-- **📦 Data Compression**: Automatic rollup of old versions
-- **🔄 Connection Pooling**: Efficient MongoDB connection management
-- **⚡ Index Optimization**: Configurable indexing for query performance
-
----
-
-## ⚙️ Configuration Reference
-
-### Basic Configuration
+### **Core Configuration**
 
 ```typescript
 interface ChronosConfig {
-  // Required: MongoDB connections (define once, reference by key)
-  mongoConns: MongoConnConfig[];
+  // Required: Connection definitions (95% reuse)
+  dbConnections: Record<string, DbConnection>;
+  spacesConnections: Record<string, SpacesConnection>;
   
-  // Required: Database configuration (can have empty sections)
+  // Required: Tiered database configuration
   databases: {
-    metadata?: DatabaseConnection[];
-    knowledge?: DatabaseConnection[];
-    runtime?: DatabaseConnection[];
-    logs?: LogsDatabaseConfig;
+    metadata?: {
+      genericDatabase: GenericDatabase;
+      domainsDatabases: DomainDatabase[];
+      tenantDatabases: TenantDatabase[];
+    };
+    knowledge?: {
+      genericDatabase: GenericDatabase;
+      domainsDatabases: DomainDatabase[];
+      tenantDatabases: TenantDatabase[];
+    };
+    runtime?: {
+      tenantDatabases: RuntimeTenantDatabase[];
+    };
+    logs?: LogsDatabase;
   };
-  
-  // Optional: S3-compatible storage (if not using localStorage)
-  spacesConns?: SpacesConnConfig[];
   
   // Optional: Local filesystem storage (for development/testing)
   localStorage?: {
     basePath: string;
     enabled: boolean;
-  };
-  
-  // Required: Counters database
-  counters: {
-    mongoUri: string;
-    dbName: string;
   };
   
   // Optional: Routing configuration
@@ -384,9 +643,6 @@ interface ChronosConfig {
     };
   };
   
-  // Optional: Data rollup configuration
-  rollup?: any;
-  
   // Optional: Collection mapping and validation
   collectionMaps?: Record<string, {
     indexedProps: string[]; // Empty array = auto-index all properties
@@ -400,7 +656,7 @@ interface ChronosConfig {
     };
   }>;
   
-  // Optional: Counter rules
+  // Optional: Counter rules for analytics
   counterRules?: {
     rules?: Array<{
       name: string;
@@ -417,18 +673,20 @@ interface ChronosConfig {
     maxBytesPerDoc?: number;
   };
   
-  // Optional: Logical delete (default: enabled)
+  // Optional: Security and compliance
   logicalDelete?: {
-    enabled: boolean;  // Set to false for hard deletes (default: true)
+    enabled: boolean;  // Default: true (GDPR compliance)
   };
-  
-  // Optional: Versioning (default: enabled)
   versioning?: {
-    enabled: boolean;  // Set to false to disable time-travel (default: true)
+    enabled: boolean;  // Default: true (audit trails)
   };
   
-  // Optional: Hard delete capability
-  hardDeleteEnabled?: boolean;
+  // Optional: Performance optimization
+  writeOptimization?: {
+    batchSize?: number;
+    debounceMs?: number;
+    compressionEnabled?: boolean;
+  };
   
   // Optional: Fallback queue configuration
   fallback?: {
@@ -439,9 +697,6 @@ interface ChronosConfig {
     deadLetterCollection?: string;
   };
   
-  // Optional: Write optimization
-  writeOptimization?: any;
-  
   // Optional: Transaction configuration
   transactions?: {
     enabled?: boolean;
@@ -449,360 +704,127 @@ interface ChronosConfig {
   };
 }
 
-interface MongoConnConfig {
-  key: string;           // Unique key for referencing this connection
-  mongoUri: string;       // MongoDB connection URI
+// Connection interfaces
+interface DbConnection {
+  mongoUri: string;
 }
 
-interface DatabaseConnection {
-  key: string;            // Globally unique identifier for direct routing
-  mongoConnKey: string;   // References a connection in mongoConns array
-  dbName: string;         // Database name
-  tenantId?: string;      // Optional tenant ID for mapping
-  spacesConnKey?: string; // References a connection in spacesConns array
+interface SpacesConnection {
+  endpoint: string;
+  region: string;
+  accessKey: string;
+  secretKey: string;
+  forcePathStyle?: boolean;
 }
 
-interface LogsDatabaseConfig {
-  connection: DatabaseConnection; // Single connection for logs (no tiers)
+// Database interfaces
+interface GenericDatabase {
+  dbConnRef: string;
+  spaceConnRef: string;
+  bucket: string;
+  dbName: string;
 }
 
-interface SpacesConnConfig {
-  key: string;            // Unique key for referencing this S3 connection
-  endpoint: string;       // S3 endpoint URL
-  region: string;         // AWS region
-  accessKey: string;      // Access key
-  secretKey: string;      // Secret key
-  buckets: {
-    json: string;         // Bucket for JSON data (chronos-jsons)
-    content: string;      // Bucket for content files
-    versions: string;     // Bucket for versions/manifests
-    backup?: string;      // Bucket for backups (optional - can reuse json bucket)
-  };
-  forcePathStyle?: boolean; // Force path style (for MinIO)
-}
-```
-
-### Multi-Tenant Architecture Explained
-
-```typescript
-interface EnhancedChronosConfig extends ChronosConfig {
-  // Optional: Enhanced multi-tenant database configuration
-  databaseTypes?: {
-    metadata?: DatabaseTypeConfig;
-    knowledge?: DatabaseTypeConfig;
-    runtime?: DatabaseTypeConfig;
-  };
+interface DomainDatabase {
+  domain: string;
+  dbConnRef: string;
+  spaceConnRef: string;
+  bucket: string;
+  dbName: string;
 }
 
-interface DatabaseTypeConfig {
-  generic: DatabaseConnection;
-  domains: DatabaseConnection[];
-  tenants: DatabaseConnection[];
+interface TenantDatabase {
+  tenantId: string;
+  dbConnRef: string;
+  spaceConnRef: string;
+  bucket: string;
+  dbName: string;
 }
 
-interface DatabaseConnection {
-  key: string;                    // Unique identifier
-  mongoUri: string;               // MongoDB connection URI
-  dbName: string;                 // Database name
-  extIdentifier?: string;         // External identifier for mapping
+interface RuntimeTenantDatabase {
+  tenantId: string;
+  dbConnRef: string;
+  spaceConnRef: string;
+  bucket: string;
+  dbName: string;
+  analyticsDbName: string;  // Integrated analytics
+}
+
+interface LogsDatabase {
+  dbConnRef: string;
+  spaceConnRef: string;
+  bucket: string;
+  dbName: string;
 }
 ```
 
-### Multi-Tenant Architecture Explained
+### **Multi-Tenant Architecture Explained**
 
-#### Database Types
+#### **Database Types**
 - **`metadata`** - System configuration, user settings, application metadata
 - **`knowledge`** - Content, documents, knowledge base, static data
 - **`runtime`** - User data, transactions, dynamic application data
+- **`logs`** - System logs, audit trails, monitoring
 
-#### Tiers
+#### **Tiers**
 - **`generic`** - Shared across all tenants (system-wide data)
 - **`domain`** - Shared within a domain (multi-tenant within domain)
 - **`tenant`** - Isolated per tenant (single-tenant data)
 
-#### Keys vs ExtIdentifiers
-- **`key`** - Globally unique identifier for direct routing (e.g., `"runtime-tenant-a"`)
-- **`extIdentifier`** - External, non-unique identifier for mapping (e.g., `"tenant-a"`)
+#### **Usage Patterns**
 
-#### Usage Patterns
-
-**Option A: Direct Key Usage (Simplest)**
+**Option A: Direct Tier + Tenant ID Usage (Recommended)**
 ```typescript
 const ops = chronos.with({
-  key: 'runtime-tenant-a',  // Direct lookup, no resolution needed
-  collection: 'users'
-});
-```
-
-**Option B: Tier + ExtIdentifier Usage**
-```typescript
-const ops = chronos.with({
-  databaseType: 'runtime',     // metadata | knowledge | runtime
+  databaseType: 'runtime',     // metadata | knowledge | runtime | logs
   tier: 'tenant',              // generic | domain | tenant
-  extIdentifier: 'tenant-a',   // Maps to key: 'runtime-tenant-a'
+  tenantId: 'tenant-a',        // Maps to tenant-specific database
   collection: 'users'
 });
 ```
 
-**Option C: Generic Tier (No ExtIdentifier)**
+**Option B: Generic Tier (No Tenant ID)**
 ```typescript
 const ops = chronos.with({
   databaseType: 'metadata',
-  tier: 'generic',              // No extIdentifier needed
+  tier: 'generic',              // No tenantId needed
   collection: 'config'
 });
 ```
 
-#### Complete Multi-Tenant Example
-
+**Option C: Domain Tier**
 ```typescript
-const chronos = initChronos({
-  mongoUris: [
-    // Metadata databases
-    'mongodb://meta-generic:27017',
-    'mongodb://meta-domain1:27017', 
-    'mongodb://meta-tenant-a:27017',
-    'mongodb://meta-tenant-b:27017',
-    
-    // Knowledge databases
-    'mongodb://know-generic:27017',
-    'mongodb://know-domain1:27017',
-    'mongodb://know-tenant-a:27017',
-    'mongodb://know-tenant-b:27017',
-    
-    // Runtime databases
-    'mongodb://runtime-generic:27017',
-    'mongodb://runtime-domain1:27017',
-    'mongodb://runtime-tenant-a:27017',
-    'mongodb://runtime-tenant-b:27017'
-  ],
-  spacesConns: [/* S3 config */],
-  counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'chronos_counters' },
-  routing: { hashAlgo: 'rendezvous' },
-  retention: {},
-  rollup: {},
-  
-  databaseTypes: {
-    metadata: {
-      generic: { 
-        key: 'meta-generic', 
-        mongoUri: 'mongodb://meta-generic:27017', 
-        dbName: 'meta_generic' 
-      },
-      domains: [
-        { 
-          key: 'meta-domain-1', 
-          extIdentifier: 'domain-1', 
-          mongoUri: 'mongodb://meta-domain1:27017', 
-          dbName: 'meta_domain_1' 
-        }
-      ],
-      tenants: [
-        { 
-          key: 'meta-tenant-a', 
-          extIdentifier: 'tenant-a', 
-          mongoUri: 'mongodb://meta-tenant-a:27017', 
-          dbName: 'meta_tenant_a' 
-        },
-        { 
-          key: 'meta-tenant-b', 
-          extIdentifier: 'tenant-b', 
-          mongoUri: 'mongodb://meta-tenant-b:27017', 
-          dbName: 'meta_tenant_b' 
-        }
-      ]
-    },
-    knowledge: {
-      generic: { 
-        key: 'know-generic', 
-        mongoUri: 'mongodb://know-generic:27017', 
-        dbName: 'know_generic' 
-      },
-      domains: [
-        { 
-          key: 'know-domain-1', 
-          extIdentifier: 'domain-1', 
-          mongoUri: 'mongodb://know-domain1:27017', 
-          dbName: 'know_domain_1' 
-        }
-      ],
-      tenants: [
-        { 
-          key: 'know-tenant-a', 
-          extIdentifier: 'tenant-a', 
-          mongoUri: 'mongodb://know-tenant-a:27017', 
-          dbName: 'know_tenant_a' 
-        },
-        { 
-          key: 'know-tenant-b', 
-          extIdentifier: 'tenant-b', 
-          mongoUri: 'mongodb://know-tenant-b:27017', 
-          dbName: 'know_tenant_b' 
-        }
-      ]
-    },
-    runtime: {
-      generic: { 
-        key: 'runtime-generic', 
-        mongoUri: 'mongodb://runtime-generic:27017', 
-        dbName: 'runtime_generic' 
-      },
-      domains: [
-        { 
-          key: 'runtime-domain-1', 
-          extIdentifier: 'domain-1', 
-          mongoUri: 'mongodb://runtime-domain1:27017', 
-          dbName: 'runtime_domain_1' 
-        }
-      ],
-      tenants: [
-        { 
-          key: 'runtime-tenant-a', 
-          extIdentifier: 'tenant-a', 
-          mongoUri: 'mongodb://runtime-tenant-a:27017', 
-          dbName: 'runtime_tenant_a' 
-        },
-        { 
-          key: 'runtime-tenant-b', 
-          extIdentifier: 'tenant-b', 
-          mongoUri: 'mongodb://runtime-tenant-b:27017', 
-          dbName: 'runtime_tenant_b' 
-        }
-      ]
-    }
-  }
-});
-
-// Usage Examples:
-
-// 1. Direct key usage (fastest)
-const tenantAUsers = chronos.with({
-  key: 'runtime-tenant-a',
-  collection: 'users'
-});
-
-// 2. Tier + extIdentifier usage (flexible)
-const tenantAUsers2 = chronos.with({
-  databaseType: 'runtime',
-  tier: 'tenant',
-  extIdentifier: 'tenant-a',  // Resolves to 'runtime-tenant-a'
-  collection: 'users'
-});
-
-// 3. Generic tier (shared data)
-const systemConfig = chronos.with({
-  databaseType: 'metadata',
-  tier: 'generic',
-  collection: 'config'
-});
-
-// 4. Domain tier (shared within domain)
-const domainContent = chronos.with({
+const ops = chronos.with({
   databaseType: 'knowledge',
   tier: 'domain',
-  extIdentifier: 'domain-1',  // Resolves to 'know-domain-1'
+  domain: 'healthcare',         // Maps to domain-specific database
   collection: 'articles'
-});
-
-// Operations work the same regardless of routing method
-await tenantAUsers.create({ email: 'user@tenant-a.com' });
-await tenantAUsers2.create({ email: 'user2@tenant-a.com' });
-await systemConfig.create({ setting: 'global_value' });
-await domainContent.create({ title: 'Shared Article' });
-```
-
-### S3 Configuration
-
-```typescript
-interface SpacesConnConfig {
-  endpoint: string;               // S3 endpoint URL
-  region: string;                 // S3 region
-  accessKey: string;              // Access key
-  secretKey: string;              // Secret key
-  backupsBucket: string;         // Backups bucket name
-  jsonBucket: string;             // JSON storage bucket name
-  contentBucket: string;          // Content storage bucket name
-  forcePathStyle?: boolean;       // Force path-style URLs
-}
-```
-
-### Configuration Examples
-
-#### Minimal Configuration (localStorage)
-```typescript
-const chronos = initChronos({
-  mongoUris: ['mongodb://localhost:27017'],
-  localStorage: { enabled: true, basePath: './data' },
-  counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'chronos_counters' },
-  routing: { hashAlgo: 'rendezvous' },
-  retention: {},
-  rollup: {},
-});
-```
-
-#### Production Configuration (S3)
-```typescript
-const chronos = initChronos({
-  mongoUris: ['mongodb://prod1:27017', 'mongodb://prod2:27017'],
-  spacesConns: [{
-    endpoint: 'https://nyc3.digitaloceanspaces.com',
-    region: 'nyc3',
-    accessKey: 'YOUR_ACCESS_KEY',
-    secretKey: 'YOUR_SECRET_KEY',
-    backupsBucket: 'chronos-backups',
-    jsonBucket: 'chronos-json',
-    contentBucket: 'chronos-content',
-  }],
-  counters: { mongoUri: 'mongodb://prod1:27017', dbName: 'chronos_counters' },
-  routing: { hashAlgo: 'rendezvous' },
-  retention: {
-    ver: { days: 30, maxPerItem: 100 },
-    counters: { days: 7, weeks: 4, months: 12 }
-  },
-  rollup: {},
-  collectionMaps: {
-    users: {
-      indexedProps: ['email', 'status'],
-      validation: { requiredIndexed: ['email'] }
-    }
-  },
-  devShadow: { enabled: true, ttlHours: 24 },
-  fallback: {
-    enabled: true,
-    maxRetries: 3,
-    retryDelayMs: 1000,
-    maxDelayMs: 60000,
-    deadLetterCollection: 'chronos_fallback_dead'
-  },
-  transactions: { enabled: true, autoDetect: true }
 });
 ```
 
 ---
 
-## 🎯 Core Features
+## 🎯 **Core Features**
 
-### 1. **CRUD Operations**
+### **1. CRUD Operations with Security**
 
-Full transaction support with optimistic locking:
+Full transaction support with optimistic locking and tenant isolation:
 
 ```typescript
-// Create with automatic versioning (ov=0)
+// Create with automatic versioning and tenant isolation
 const created = await ops.create(data, 'actor', 'reason');
 // Returns: { id, ov: 0, cv: 0, createdAt }
 
-// Update with optimistic lock
+// Update with optimistic lock and tenant context
 const updated = await ops.update(id, newData, expectedOv, 'actor', 'reason');
 // Returns: { id, ov: 1, cv: 1, updatedAt }
 
-// Logical delete (default)
+// Logical delete (default) - maintains audit trail
 const deleted = await ops.delete(id, expectedOv, 'actor', 'reason');
 // Returns: { id, ov: 2, cv: 2, deletedAt }
 ```
 
----
-
-### 2. **Enrichment API**
+### **2. Enrichment API**
 
 Incrementally augment records without full rewrite:
 
@@ -825,14 +847,12 @@ await ops.enrich(id, [
 ]);
 ```
 
----
+### **3. Read Operations with Presigned URLs**
 
-### 3. **Read Operations**
-
-Multiple read strategies with presigned URL support:
+Multiple read strategies with security:
 
 ```typescript
-// Get latest version
+// Get latest version with presigned URL
 const latest = await ops.getLatest(id, { 
   presign: true,
   ttlSeconds: 3600,
@@ -842,8 +862,8 @@ const latest = await ops.getLatest(id, {
 // Get specific version
 const v1 = await ops.getVersion(id, 1);
 
-// Get as of time
-const historical = await ops.getAsOf(id, '2025-09-01T00:00:00Z');
+// Get as of time (time-travel)
+const historical = await ops.getAsOf(id, '2024-01-01T00:00:00Z');
 
 // List by metadata with pagination
 const results = await ops.listByMeta({
@@ -854,49 +874,14 @@ const results = await ops.listByMeta({
 }, { presign: true });
 ```
 
----
+### **4. Integrated Analytics**
 
-### 4. **Restore Operations**
-
-Explicit, append-only restore:
+Built-in analytics for each tenant:
 
 ```typescript
-// Restore object to specific version
-await ops.restoreObject(id, { ov: 5 });
-// or by time
-await ops.restoreObject(id, { at: '2025-09-01T00:00:00Z' });
-
-// Restore entire collection
-await ops.restoreCollection({ cv: 100 });
-// or by time
-await ops.restoreCollection({ at: '2025-09-01T00:00:00Z' });
-```
-
----
-
-### 5. **Counters & Analytics**
-
-Cheap, always-on totals:
-
-```typescript
-// Configure conditional counters
-const config = {
-  // ... other config
-  counterRules: {
-    rules: [
-      {
-        name: 'activeUsers',
-        when: { status: 'active' },
-        on: ['CREATE', 'UPDATE'],
-        scope: 'meta',
-      },
-    ],
-  },
-};
-
-// Query totals
-const totals = await chronos.counters.getTotals({
-  dbName: 'myapp',
+// Analytics automatically tracked in analyticsDbName
+const metrics = await chronos.counters.getTotals({
+  dbName: 'chronos_runtime_tenant_a',
   collection: 'users',
 });
 
@@ -909,221 +894,85 @@ const totals = await chronos.counters.getTotals({
 // }
 ```
 
----
+### **5. Restore Operations**
 
-### 6. **Fallback Queues**
-
-Guaranteed durability with automatic retry:
+Explicit, append-only restore with audit trails:
 
 ```typescript
-// Enable fallback queues
-const config = {
-  // ... other config
-  fallback: {
-    enabled: true,
-    maxAttempts: 10,
-    baseDelayMs: 2000,
-    maxDelayMs: 60000,
-    deadLetterCollection: 'chronos_fallback_dead',
-  },
-};
+// Restore object to specific version
+await ops.restoreObject(id, { ov: 5 });
+// or by time
+await ops.restoreObject(id, { at: '2024-01-01T00:00:00Z' });
 
-// Start worker for automatic retries
-await chronos.fallback?.startWorker();
+// Restore entire collection
+await ops.restoreCollection({ cv: 100 });
+// or by time
+await ops.restoreCollection({ at: '2024-01-01T00:00:00Z' });
+```
 
-// Monitor queue
-const stats = await chronos.fallback?.getQueueStats();
-console.log('Pending ops:', stats.queueSize);
-console.log('Dead letters:', stats.deadLetterSize);
+---
 
-// Retry dead letter operation
-const deadLetters = await chronos.fallback?.getDeadLetterOps({}, 10);
-for (const op of deadLetters) {
-  await chronos.fallback?.retryDeadLetter(op._id.toString());
+## 🔐 **Security & Compliance**
+
+### **GDPR Compliance**
+
+```typescript
+// Enable logical delete for GDPR compliance
+logicalDelete: {
+  enabled: true  // Default - enables data recovery and audit trails
+},
+
+// Enable versioning for data lineage
+versioning: {
+  enabled: true  // Default - enables time-travel queries and audit trails
 }
 
-// Stop worker
-await chronos.fallback?.stopWorker();
+// Data deletion with audit trail
+await ops.delete(id, expectedOv, 'gdpr-request', 'user-data-deletion');
+// Data is logically deleted but remains in audit trail
 ```
 
----
-
-### 7. **Transaction Locking**
-
-Prevent concurrent writes across multiple servers:
+### **SOX Compliance**
 
 ```typescript
-// Automatic transaction locking on all write operations
-// No additional configuration needed - works out of the box
-
-// Create operation - automatically acquires lock on item
-const result = await ops.create(data, 'actor', 'reason');
-
-// Update operation - automatically acquires lock on item
-await ops.update(id, newData, expectedOv, 'actor', 'reason');
-
-// Delete operation - automatically acquires lock on item
-await ops.delete(id, expectedOv, 'actor', 'reason');
-
-// Locks are automatically released after operation completes
-// If operation fails, locks are cleaned up automatically
-// Expired locks (30s timeout) are cleaned up periodically
-```
-
-**How it works:**
-- Each write operation acquires an exclusive lock on the item
-- Locks are stored in MongoDB with automatic expiration
-- Multiple servers can run simultaneously without conflicts
-- Failed transactions are automatically recovered via queue system
-
----
-
-### 8. **System Fields & State Management**
-
-Every record includes comprehensive system tracking:
-
-```typescript
-{
-  "_system": {
-    "insertedAt": "2025-10-01T12:00:00Z",
-    "updatedAt": "2025-10-01T12:30:00Z",
-    "deletedAt": "2025-10-01T13:00:00Z",
-    "deleted": false,
-    "functionIds": ["scorer@v1", "enricher@v2"],
-    "state": "new"  // NEW: Data sync and TTL state
+// Enable comprehensive audit trails
+collectionMaps: {
+  financial_records: {
+    indexedProps: ['accountId', 'transactionId', 'amount', 'date'],
+    validation: {
+      requiredIndexed: ['accountId', 'transactionId', 'amount']
+    }
   }
+},
+
+// Enable transaction logging
+transactions: {
+  enabled: true,
+  autoDetect: true
 }
 ```
 
-**State Values:**
-- `"new-not-synched"` - Data exists only in MongoDB record, not synced to JSON storage
-- `"new"` - Data is synced to JSON storage but hasn't passed TTL
-- `"processed"` - Data has passed TTL, some data may only exist in JSON storage
-
-**State Management:**
-```typescript
-// Mark items as processed based on TTL expiration
-const result = await chronos.admin.markItemsAsProcessedByTTL(
-  { dbName: 'myapp', collection: 'users' },
-  24, // TTL in hours
-  { confirm: true, dryRun: false }
-);
-
-// Mark specific item as processed
-const marked = await chronos.admin.markItemAsProcessed(
-  { dbName: 'myapp', collection: 'users' },
-  'item-id',
-  { confirm: true }
-);
-```
-
----
-
-### 9. **Collection Maps & Auto-Indexing**
-
-chronos-db supports flexible collection mapping with automatic indexing:
+### **HIPAA Compliance**
 
 ```typescript
-// Option 1: No collection map - all properties are automatically indexed
-const chronos = initChronos({
-  mongoUris: ['mongodb://localhost:27017'],
-  localStorage: { enabled: true, basePath: './data' },
-  // No collectionMaps defined - all properties are indexed automatically
-});
-
-// Option 2: Explicit collection map for specific collections
-const chronos = initChronos({
-  mongoUris: ['mongodb://localhost:27017'],
-  localStorage: { enabled: true, basePath: './data' },
-  collectionMaps: {
-    users: {
-      indexedProps: ['email', 'status'], // Only these are indexed
-      validation: {
-        requiredIndexed: ['email'], // Required fields
-      },
-    },
-    // Other collections without maps will auto-index all properties
-  },
-});
-```
-
-**Auto-Indexing Behavior:**
-- **No collection map**: All properties are automatically indexed (except `_system`)
-- **Empty `indexedProps`**: All properties are indexed
-- **Specified `indexedProps`**: Only listed properties are indexed
-- **Required fields**: Only validated if explicitly defined
-
-**Benefits:**
-- ✅ **Zero configuration** for simple use cases
-- ✅ **Gradual adoption** - add maps only when needed
-- ✅ **Full control** when required for complex schemas
-- ✅ **Performance optimization** - index only what you need
-
----
-
-### 10. **Admin API & DigitalOcean Spaces Integration**
-
-Comprehensive admin tools for production management:
-
-```typescript
-// Test S3 connectivity
-const connectivity = await chronos.admin.testS3Connectivity({
-  dbName: 'myapp',
-  collection: 'users'
-});
-
-if (connectivity.success) {
-  console.log('Available buckets:', connectivity.buckets);
-} else {
-  console.log('Connectivity issue:', connectivity.error);
-}
-
-// Validate DigitalOcean Spaces configuration
-const validation = await chronos.admin.validateSpacesConfiguration({
-  dbName: 'myapp',
-  collection: 'users'
-});
-
-if (!validation.valid) {
-  console.log('Issues:', validation.issues);
-  console.log('Recommendations:', validation.recommendations);
-}
-
-// Ensure required buckets exist (with auto-creation)
-const bucketResult = await chronos.admin.ensureBucketsExist(
-  { dbName: 'myapp', collection: 'users' },
+// Separate infrastructure per tenant for healthcare data
+tenantDatabases: [
   {
-    confirm: true,
-    createIfMissing: true,
-    dryRun: false
+    tenantId: 'healthcare-provider',
+    dbConnRef: 'mongo-healthcare',      // Separate MongoDB cluster
+    spaceConnRef: 's3-healthcare',      // Separate S3 bucket
+    bucket: 'chronos-healthcare',
+    dbName: 'chronos_healthcare',
+    analyticsDbName: 'chronos_analytics_healthcare'
   }
-);
-
-console.log(`Checked ${bucketResult.bucketsChecked} buckets`);
-console.log(`Created ${bucketResult.bucketsCreated} buckets`);
-
-// State management for TTL processing
-const stateResult = await chronos.admin.markItemsAsProcessedByTTL(
-  { dbName: 'myapp', collection: 'users' },
-  24, // TTL in hours
-  { confirm: true, dryRun: false }
-);
-
-console.log(`Processed ${stateResult.itemsProcessed} items`);
+]
 ```
-
-**Admin Functions:**
-- `testS3Connectivity()` - Test S3 credentials and list buckets
-- `validateSpacesConfiguration()` - Validate DigitalOcean Spaces setup
-- `ensureBucketsExist()` - Check and create required buckets
-- `markItemsAsProcessedByTTL()` - Process items based on TTL expiration
-- `markItemAsProcessed()` - Mark specific item as processed
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ **Architecture**
 
-### Data Flow
+### **Data Flow**
 
 ```
 ┌─────────────┐
@@ -1132,9 +981,10 @@ console.log(`Processed ${stateResult.itemsProcessed} items`);
        │
        ▼
 ┌─────────────────────────────────┐
-│  Unified Data Manager (UDM)     │
+│  Chronos-DB v2.0               │
 │  ┌───────────────────────────┐  │
 │  │  Router (HRW Hashing)     │  │
+│  │  + Tenant Resolution      │  │
 │  └───────────────────────────┘  │
 │          │           │           │
 │          ▼           ▼           │
@@ -1144,22 +994,26 @@ console.log(`Processed ${stateResult.itemsProcessed} items`);
 │  └──────────┘  └──────────┘     │
 │                                  │
 │  ┌───────────────────────────┐  │
+│  │  Analytics (Integrated)   │  │
+│  └───────────────────────────┘  │
+│                                  │
+│  ┌───────────────────────────┐  │
 │  │  Fallback Queue (Optional)│  │
 │  └───────────────────────────┘  │
 └─────────────────────────────────┘
 ```
 
-### MongoDB Collections
+### **MongoDB Collections**
 
 - **`<collection>_head`** - Latest state pointers
 - **`<collection>_ver`** - Immutable version index
 - **`<collection>_counter`** - Collection version counter
 - **`<collection>_locks`** - Transaction locks for concurrent write prevention
-- **`cnt_total`** - Counter totals (in separate DB)
+- **`cnt_total`** - Counter totals (in analytics database)
 - **`chronos_fallback_ops`** - Fallback queue (if enabled)
 - **`chronos_fallback_dead`** - Dead letter queue (if enabled)
 
-### S3 Storage Layout
+### **S3 Storage Layout**
 
 ```
 <jsonBucket>/
@@ -1181,9 +1035,9 @@ console.log(`Processed ${stateResult.itemsProcessed} items`);
 
 ---
 
-## 🔐 Production Deployment
+## 🔐 **Production Deployment**
 
-### MongoDB Replica Set (REQUIRED)
+### **MongoDB Replica Set (REQUIRED)**
 
 ⚠️ **MongoDB MUST run as a 3-node replica set in production**
 
@@ -1208,7 +1062,7 @@ Connection string:
 mongodb://mongo1:27017,mongo2:27017,mongo3:27017/dbname?replicaSet=rs0
 ```
 
-### S3-Compatible Providers
+### **S3-Compatible Providers**
 
 Tested with:
 - ✅ AWS S3
@@ -1218,35 +1072,34 @@ Tested with:
 
 ---
 
-## 📚 Documentation
+## 📚 **Documentation**
 
-- [Implementation Status](./IMPLEMENTATION_STATUS.md) - Complete feature matrix
-- [Configuration Guide](./documenation/readme.md) - Detailed configuration
-- [Architecture Plan](./documenation/plan) - Master workplan
-- [Extensions](./documenation/extensions.md) - System fields & shadows
-- [Enrichment API](./documenation/extension2.md) - Deep merge semantics
-- [DigitalOcean Spaces Integration](./docs/DIGITALOCEAN_SPACES.md) - Complete setup guide
-- [DigitalOcean Troubleshooting](./TROUBLESHOOTING_DIGITALOCEAN.md) - Credential and permission issues
+- [Configuration Guide](./docs/CONFIGURATION.md) - Detailed configuration
+- [API Reference](./docs/API.md) - Complete API documentation
+- [Examples](./docs/EXAMPLES.md) - Code examples and patterns
+- [Getting Started](./docs/GETTING_STARTED.md) - Step-by-step setup
+- [Quick Start Guide](./docs/QUICK_START_GUIDE.md) - Fast setup guide
 
 ---
 
-## 🤝 Contributing
+## 🤝 **Contributing**
 
 Contributions welcome! Please ensure:
 
 1. TypeScript compilation passes
 2. Documentation is updated
-3. Changes are backward compatible
+3. Security considerations are addressed
+4. Tests are included
 
 ---
 
-## 📄 License
+## 📄 **License**
 
 MIT © nx-intelligence
 
 ---
 
-## 🙏 Credits
+## 🙏 **Credits**
 
 Built with:
 - [MongoDB](https://www.mongodb.com/) - Document database
@@ -1257,391 +1110,57 @@ Built with:
 
 ---
 
-## 📋 Frequently Asked Questions (FAQs)
+## 📋 **Frequently Asked Questions (FAQs)**
 
-### **Q: What's the difference between the old and new configuration structure?**
-**A:** The new structure (v1.5+) uses a simplified key-based mapping system:
-- **Old**: `mongoUris` array + `databaseTypes` with nested tiers
-- **New**: `mongoConns` array + `databases` with direct arrays + `key`/`mongoConnKey`/`spacesConnKey` mapping
-- **Benefits**: More flexible, reusable connections, explicit relationships, easier maintenance
+### **Q: What's new in v2.0.0?**
+**A:** Chronos-DB v2.0.0 introduces a completely new architecture:
+- **Connection Reuse**: Define MongoDB/S3 connections once, reference everywhere (95% reuse)
+- **Tiered Architecture**: Proper separation of generic, domain, and tenant tiers
+- **Integrated Analytics**: Analytics databases embedded in runtime configuration
+- **Simplified Configuration**: No more nested tenant wrappers
+- **Enhanced Security**: Built-in tenant isolation and compliance features
 
-### **Q: When should I use direct keys vs tenant-based routing?**
+### **Q: How does tenant isolation work?**
+**A:** Chronos-DB v2.0.0 provides multiple levels of tenant isolation:
+- **Database Level**: Each tenant can have separate databases
+- **Infrastructure Level**: Each tenant can have separate MongoDB clusters and S3 buckets
+- **Network Level**: Complete network isolation between tenants
+- **Access Control**: Tenant context required for all operations
+
+### **Q: What are the security best practices?**
 **A:** 
-- **Direct keys** (`key: 'runtime-tenant-a'`) - Use when you know the exact database connection and want maximum performance
-- **Tenant-based routing** (`databaseType: 'runtime', tenantId: 'tenant-a'`) - Use when you want to route based on tenant context
-- **Logs database** (`key: 'logs-main'`) - Use for system logs and audit trails (no tiers)
+- **Use separate infrastructure** for high-security tenants
+- **Enable logical delete** for GDPR compliance
+- **Enable versioning** for audit trails
+- **Use connection reuse** to reduce attack surface
+- **Implement proper access controls** at the application level
 
-### **Q: How do I disable logical delete and use hard deletes instead?**
-**A:** Set `logicalDelete.enabled: false` in your configuration:
-```typescript
-const chronos = initChronos({
-  // ... other config
-  logicalDelete: {
-    enabled: false  // This will perform hard deletes instead of logical deletes
-  }
-});
-```
+### **Q: How do I handle big data scenarios?**
+**A:** Chronos-DB v2.0.0 is optimized for big data:
+- **Horizontal scaling** across multiple MongoDB clusters
+- **S3 integration** for large datasets
+- **Batch operations** with write optimization
+- **Integrated analytics** for business intelligence
+- **Connection pooling** for high throughput
 
-### **Q: How do I disable versioning to save storage space?**
-**A:** Set `versioning.enabled: false` in your configuration:
-```typescript
-const chronos = initChronos({
-  // ... other config
-  versioning: {
-    enabled: false  // This disables time-travel queries and version storage
-  }
-});
-```
-
-### **Q: What's the difference between logical delete and hard delete?**
-**A:**
-- **Logical delete** (default): Sets `deletedAt` timestamp, records remain in database but are hidden from queries
-- **Hard delete**: Permanently removes records from both MongoDB and S3 storage
-- **Hard delete capability**: Enables the `admin.hardDelete()` API for irreversible deletion
-
-### **Q: Can I mix different routing methods in the same application?**
-**A:** Yes! You can use different routing methods for different operations:
-```typescript
-// Direct key for critical operations
-const criticalOps = chronos.with({ key: 'runtime-tenant-a', collection: 'payments' });
-
-// Tier-based for flexible operations  
-const flexibleOps = chronos.with({ 
-  databaseType: 'runtime', 
-  tier: 'tenant', 
-  extIdentifier: 'tenant-a', 
-  collection: 'users' 
-});
-```
-
-### **Q: What happens if I don't provide a collection map?**
-**A:** If no collection map is defined, chronos-db automatically indexes **all properties** (except `_system`). This is called "auto-indexing" and is perfect for rapid prototyping and simple use cases.
-
-### **Q: How does the state field work with TTL?**
-**A:** The `state` field tracks data lifecycle:
-- `"new-not-synched"` - Data exists only in MongoDB record
-- `"new"` - Data is synced to JSON storage but hasn't passed TTL
-- `"processed"` - Data has passed TTL, some data may only exist in JSON storage
-
-Use `markItemsAsProcessedByTTL()` to transition states based on TTL expiration.
+### **Q: How do I migrate from v1.x to v2.0.0?**
+**A:** v2.0.0 is a breaking change. You'll need to:
+1. Update your configuration structure
+2. Update your routing patterns
+3. Update your analytics configuration
+4. Test thoroughly in a staging environment
 
 ### **Q: Can I use chronos-db without S3?**
 **A:** Yes! Use `localStorage` for development/testing:
 ```typescript
 const chronos = initChronos({
-  mongoUris: ['mongodb://localhost:27017'],
-  localStorage: { enabled: true, basePath: './data' },
-  counters: { mongoUri: 'mongodb://localhost:27017', dbName: 'chronos_counters' },
-  routing: { hashAlgo: 'rendezvous' },
-  retention: {},
-  rollup: {},
+  dbConnections: { 'local': { mongoUri: 'mongodb://localhost:27017' } },
+  spacesConnections: {},
+  databases: { /* your config */ },
+  localStorage: { enabled: true, basePath: './data' }
 });
-```
-
-### **Q: How do I handle failed operations?**
-**A:** Enable fallback queues for automatic retry:
-```typescript
-const chronos = initChronos({
-  // ... other config
-  fallback: {
-    enabled: true,
-    maxRetries: 3,
-    retryDelayMs: 1000,
-    maxDelayMs: 60000,
-    deadLetterCollection: 'chronos_fallback_dead'
-  }
-});
-```
-
-### **Q: What's the difference between hard delete and soft delete?**
-**A:** 
-- **Soft delete** (default) - Sets `deleted: true` and `deletedAt` timestamp, data remains recoverable
-- **Hard delete** - Permanently removes data from both MongoDB and S3 (enable with `hardDeleteEnabled: true`)
-
-### **Q: How do I monitor chronos-db performance?**
-**A:** Use the admin API for monitoring:
-```typescript
-// Health check
-const health = await chronos.admin.health();
-
-// Backend information
-const backends = await chronos.admin.listBackends();
-
-// Counter analytics
-const totals = await chronos.counters.getTotals({ dbName: 'myapp', collection: 'users' });
-```
-
-### **Q: Can I use chronos-db with DigitalOcean Spaces?**
-**A:** Yes! DigitalOcean Spaces is S3-compatible. Use the admin API to validate your configuration:
-```typescript
-const validation = await chronos.admin.validateSpacesConfiguration({
-  dbName: 'myapp',
-  collection: 'users'
-});
-
-if (!validation.valid) {
-  console.log('Issues:', validation.issues);
-  console.log('Recommendations:', validation.recommendations);
-}
 ```
 
 ---
 
-## 📊 Logging & Monitoring with logs-gateway
-
-chronos-db integrates seamlessly with logs-gateway for comprehensive logging and monitoring:
-
-### **Structured Logging**
-
-chronos-db uses structured logging that works perfectly with logs-gateway:
-
-```typescript
-import { logger } from 'chronos-db';
-
-// All chronos-db operations automatically log structured data
-const result = await ops.create({ email: 'user@example.com' });
-
-// Logs include:
-// - Operation type (CREATE, UPDATE, DELETE)
-// - Collection and database information
-// - Routing decisions
-// - Performance metrics
-// - Error details (if any)
-```
-
-### **Log Categories**
-
-chronos-db generates logs in these categories:
-
-#### **1. Operation Logs**
-```json
-{
-  "level": "info",
-  "category": "chronos-operation",
-  "operation": "CREATE",
-  "collection": "users",
-  "dbName": "myapp",
-  "tenantId": "tenant-a",
-  "duration": 45,
-  "timestamp": "2024-01-15T10:30:00Z"
-}
-```
-
-#### **2. Routing Logs**
-```json
-{
-  "level": "debug",
-  "category": "chronos-routing",
-  "method": "getRouteInfo",
-  "ctx": {
-    "dbName": "myapp",
-    "collection": "users",
-    "key": "runtime-tenant-a"
-  },
-  "index": 2,
-  "backend": "mongodb://runtime-tenant-a:27017",
-  "routingKey": "runtime-tenant-a",
-  "resolvedDbName": "runtime_tenant_a"
-}
-```
-
-#### **3. Performance Logs**
-```json
-{
-  "level": "info",
-  "category": "chronos-performance",
-  "operation": "bulkCreate",
-  "itemsCount": 100,
-  "duration": 1250,
-  "avgPerItem": 12.5,
-  "timestamp": "2024-01-15T10:30:00Z"
-}
-```
-
-#### **4. Error Logs**
-```json
-{
-  "level": "error",
-  "category": "chronos-error",
-  "operation": "UPDATE",
-  "error": "OptimisticLockError",
-  "message": "Version mismatch: expected 5, got 3",
-  "collection": "users",
-  "itemId": "507f1f77bcf86cd799439011",
-  "timestamp": "2024-01-15T10:30:00Z"
-}
-```
-
-### **logs-gateway Integration**
-
-Configure logs-gateway to capture chronos-db logs:
-
-```typescript
-// logs-gateway configuration
-const logsGateway = new LogsGateway({
-  sources: [
-    {
-      name: 'chronos-db',
-      patterns: [
-        'chronos-operation:*',
-        'chronos-routing:*', 
-        'chronos-performance:*',
-        'chronos-error:*'
-      ],
-      processors: [
-        'chronos-performance-analyzer',
-        'chronos-error-aggregator',
-        'chronos-routing-optimizer'
-      ]
-    }
-  ],
-  outputs: [
-    {
-      type: 'elasticsearch',
-      index: 'chronos-logs-{YYYY.MM.DD}'
-    },
-    {
-      type: 'grafana',
-      dashboard: 'chronos-db-monitoring'
-    }
-  ]
-});
-```
-
-### **Custom Logging**
-
-Add custom logging to your chronos-db operations:
-
-```typescript
-// Custom operation logging
-const ops = chronos.with({
-  key: 'runtime-tenant-a',
-  collection: 'users'
-});
-
-// Wrap operations with custom logging
-const createUser = async (userData) => {
-  const startTime = Date.now();
-  
-  try {
-    logger.info('chronos-operation:CREATE:START', {
-      collection: 'users',
-      tenantId: 'tenant-a',
-      userData: { email: userData.email } // Don't log sensitive data
-    });
-    
-    const result = await ops.create(userData);
-    
-    logger.info('chronos-operation:CREATE:SUCCESS', {
-      collection: 'users',
-      tenantId: 'tenant-a',
-      itemId: result.id,
-      duration: Date.now() - startTime
-    });
-    
-    return result;
-  } catch (error) {
-    logger.error('chronos-operation:CREATE:ERROR', {
-      collection: 'users',
-      tenantId: 'tenant-a',
-      error: error.message,
-      duration: Date.now() - startTime
-    });
-    throw error;
-  }
-};
-```
-
-### **Monitoring Dashboards**
-
-Create Grafana dashboards for chronos-db monitoring:
-
-#### **Performance Dashboard**
-- Operations per second by collection
-- Average operation duration
-- Error rates by operation type
-- Backend utilization
-
-#### **Routing Dashboard**  
-- Routing decisions by tenant
-- Backend distribution
-- Routing performance metrics
-- Multi-tenant usage patterns
-
-#### **Storage Dashboard**
-- S3 storage usage
-- MongoDB collection sizes
-- TTL processing metrics
-- State transition statistics
-
-### **Alerting Rules**
-
-Set up alerts for critical chronos-db metrics:
-
-```yaml
-# Prometheus alerting rules
-groups:
-  - name: chronos-db
-    rules:
-      - alert: ChronosHighErrorRate
-        expr: rate(chronos_errors_total[5m]) > 0.1
-        for: 2m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High error rate in chronos-db operations"
-          
-      - alert: ChronosSlowOperations
-        expr: histogram_quantile(0.95, rate(chronos_operation_duration_seconds_bucket[5m])) > 5
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "95th percentile operation duration exceeds 5 seconds"
-          
-      - alert: ChronosBackendDown
-        expr: up{job="chronos-backend"} == 0
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Chronos backend is down"
-```
-
-### **Log Analysis Queries**
-
-Useful queries for analyzing chronos-db logs:
-
-```sql
--- Top collections by operation count
-SELECT collection, COUNT(*) as operations
-FROM chronos_logs 
-WHERE category = 'chronos-operation'
-GROUP BY collection
-ORDER BY operations DESC;
-
--- Average operation duration by tenant
-SELECT tenantId, AVG(duration) as avg_duration
-FROM chronos_logs 
-WHERE category = 'chronos-performance'
-GROUP BY tenantId;
-
--- Error rate by operation type
-SELECT operation, 
-       COUNT(CASE WHEN level = 'error' THEN 1 END) as errors,
-       COUNT(*) as total,
-       (errors * 100.0 / total) as error_rate
-FROM chronos_logs 
-WHERE category = 'chronos-operation'
-GROUP BY operation;
-```
-
----
-
-## 📞 Support
-
-For issues, questions, or feature requests, please open an issue on GitHub.
-
----
-
-**Made with ❤️ for production-grade data management**
+**Made with ❤️ for enterprise-grade data management**

@@ -1,110 +1,233 @@
 {
-  "mongoConns": [
-    {
-      "key": "mongo-cluster-a",
-      "mongoUri": "mongodb+srv://username:password@cluster-a.mongodb.net?retryWrites=true&w=majority"
+  "dbConnections": {
+    "mongo-primary": {
+      "mongoUri": "mongodb+srv://user:pass@primary-cluster.mongodb.net/?retryWrites=true&w=majority"
     },
-    {
-      "key": "mongo-cluster-b", 
-      "mongoUri": "mongodb+srv://username:password@cluster-b.mongodb.net?retryWrites=true&w=majority"
-    }
-  ],
-  "databases": {
-    "metadata": [
-      {
-        "key": "meta-tenant-a",
-        "tenantId": "tenant-a",
-        "mongoConnKey": "mongo-cluster-b",
-        "dbName": "metadata_tenant_a",
-        "spacesConnKey": "aws-us-east-1"
-      }
-    ],
-    "runtime": [
-      {
-        "key": "runtime-tenant-a",
-        "tenantId": "tenant-a",
-        "mongoConnKey": "mongo-cluster-b",
-        "dbName": "runtime_tenant_a",
-        "spacesConnKey": "aws-us-east-1"
-      }
-    ],
-    "logs": {
-      "connection": {
-        "key": "logs-main",
-        "mongoConnKey": "mongo-cluster-a",
-        "dbName": "chronos_logs",
-        "spacesConnKey": "aws-us-east-1"
-      }
+    "mongo-analytics": {
+      "mongoUri": "mongodb+srv://user:pass@analytics-cluster.mongodb.net/?retryWrites=true&w=majority"
+    },
+    "mongo-logs": {
+      "mongoUri": "mongodb+srv://user:pass@logs-cluster.mongodb.net/?retryWrites=true&w=majority"
     }
   },
-  "spacesConns": [
-    {
-      "key": "aws-us-east-1",
-      "endpoint": "https://s3.us-east-1.amazonaws.com",
+  "spacesConnections": {
+    "s3-primary": {
+      "endpoint": "https://s3.amazonaws.com",
       "region": "us-east-1",
-      "accessKey": "YOUR_AWS_ACCESS_KEY",
-      "secretKey": "YOUR_AWS_SECRET_KEY",
-      "buckets": {
-        "json": "chronos-json-us-east-1",
-        "content": "chronos-content-us-east-1",
-        "versions": "chronos-versions-us-east-1",
-        "backup": "chronos-backups-us-east-1"
-      },
-      "forcePathStyle": false
+      "accessKey": "YOUR_AWS_ACCESS_KEY_ID",
+      "secretKey": "YOUR_AWS_SECRET_ACCESS_KEY"
     },
-    {
-      "key": "aws-eu-west-1",
-      "endpoint": "https://s3.eu-west-1.amazonaws.com",
-      "region": "eu-west-1",
-      "accessKey": "YOUR_AWS_ACCESS_KEY_2",
-      "secretKey": "YOUR_AWS_SECRET_KEY_2",
-      "buckets": {
-        "json": "chronos-json-eu-west-1",
-        "content": "chronos-content-eu-west-1",
-        "versions": "chronos-versions-eu-west-1",
-        "backup": "chronos-backups-eu-west-1"
-      },
-      "forcePathStyle": false
+    "s3-analytics": {
+      "endpoint": "https://s3.amazonaws.com",
+      "region": "us-west-2",
+      "accessKey": "YOUR_AWS_ACCESS_KEY_ID",
+      "secretKey": "YOUR_AWS_SECRET_ACCESS_KEY"
     }
-  ],
-  "counters": {
-    "mongoUri": "mongodb+srv://username:password@cluster-metrics.mongodb.net/counters?retryWrites=true&w=majority",
-    "dbName": "chronos_counters"
+  },
+  "databases": {
+    "metadata": {
+      "genericDatabase": {
+        "dbConnRef": "mongo-primary",
+        "spaceConnRef": "s3-primary",
+        "bucket": "chronos-metadata",
+        "dbName": "chronos_metadata_generic"
+      },
+      "domainsDatabases": [
+        {
+          "domain": "healthcare",
+          "dbConnRef": "mongo-primary",
+          "spaceConnRef": "s3-primary",
+          "bucket": "chronos-metadata-healthcare",
+          "dbName": "chronos_metadata_healthcare"
+        },
+        {
+          "domain": "finance",
+          "dbConnRef": "mongo-primary",
+          "spaceConnRef": "s3-primary",
+          "bucket": "chronos-metadata-finance",
+          "dbName": "chronos_metadata_finance"
+        }
+      ],
+      "tenantDatabases": [
+        {
+          "tenantId": "tenant-a",
+          "dbConnRef": "mongo-primary",
+          "spaceConnRef": "s3-primary",
+          "bucket": "chronos-metadata-tenant-a",
+          "dbName": "chronos_metadata_tenant_a"
+        },
+        {
+          "tenantId": "tenant-b",
+          "dbConnRef": "mongo-primary",
+          "spaceConnRef": "s3-primary",
+          "bucket": "chronos-metadata-tenant-b",
+          "dbName": "chronos_metadata_tenant_b"
+        }
+      ]
+    },
+    "knowledge": {
+      "genericDatabase": {
+        "dbConnRef": "mongo-primary",
+        "spaceConnRef": "s3-primary",
+        "bucket": "chronos-knowledge",
+        "dbName": "chronos_knowledge_generic"
+      },
+      "domainsDatabases": [
+        {
+          "domain": "healthcare",
+          "dbConnRef": "mongo-primary",
+          "spaceConnRef": "s3-primary",
+          "bucket": "chronos-knowledge-healthcare",
+          "dbName": "chronos_knowledge_healthcare"
+        },
+        {
+          "domain": "finance",
+          "dbConnRef": "mongo-primary",
+          "spaceConnRef": "s3-primary",
+          "bucket": "chronos-knowledge-finance",
+          "dbName": "chronos_knowledge_finance"
+        }
+      ],
+      "tenantDatabases": [
+        {
+          "tenantId": "tenant-a",
+          "dbConnRef": "mongo-primary",
+          "spaceConnRef": "s3-primary",
+          "bucket": "chronos-knowledge-tenant-a",
+          "dbName": "chronos_knowledge_tenant_a"
+        },
+        {
+          "tenantId": "tenant-b",
+          "dbConnRef": "mongo-primary",
+          "spaceConnRef": "s3-primary",
+          "bucket": "chronos-knowledge-tenant-b",
+          "dbName": "chronos_knowledge_tenant_b"
+        }
+      ]
+    },
+    "runtime": {
+      "tenantDatabases": [
+        {
+          "tenantId": "tenant-a",
+          "dbConnRef": "mongo-primary",
+          "spaceConnRef": "s3-primary",
+          "bucket": "chronos-runtime-tenant-a",
+          "dbName": "chronos_runtime_tenant_a",
+          "analyticsDbName": "chronos_analytics_tenant_a"
+        },
+        {
+          "tenantId": "tenant-b",
+          "dbConnRef": "mongo-primary",
+          "spaceConnRef": "s3-primary",
+          "bucket": "chronos-runtime-tenant-b",
+          "dbName": "chronos_runtime_tenant_b",
+          "analyticsDbName": "chronos_analytics_tenant_b"
+        },
+        {
+          "tenantId": "enterprise-client",
+          "dbConnRef": "mongo-analytics",
+          "spaceConnRef": "s3-analytics",
+          "bucket": "chronos-runtime-enterprise",
+          "dbName": "chronos_runtime_enterprise",
+          "analyticsDbName": "chronos_analytics_enterprise"
+        }
+      ]
+    },
+    "logs": {
+      "dbConnRef": "mongo-logs",
+      "spaceConnRef": "s3-primary",
+      "bucket": "chronos-logs",
+      "dbName": "chronos_logs"
+    }
   },
   "routing": {
     "hashAlgo": "rendezvous",
-    "chooseKey": "tenantId|dbName"
+    "chooseKey": "tenantId|dbName|collection:objectId"
   },
   "retention": {
-    "ver": { "days": 60, "maxPerItem": 30 },
-    "counters": { "days": 365, "weeks": 260, "months": 120 }
-  },
-  "rollup": {
-    "enabled": true,
-    "manifestPeriod": "daily"
+    "ver": {
+      "days": 90,
+      "maxPerItem": 1000
+    },
+    "counters": {
+      "days": 30,
+      "weeks": 12,
+      "months": 12
+    }
   },
   "collectionMaps": {
-    "kycDocuments": {
-      "indexedProps": ["clientId", "documentType", "issuedCountry"],
-      "base64Props": { 
-        "fileContent": { 
-          "contentType": "application/pdf",
-          "preferredText": false
-        } 
-      },
-      "validation": { 
-        "requiredIndexed": ["clientId", "documentType"] 
+    "users": {
+      "indexedProps": ["email", "tenantId", "status"],
+      "validation": {
+        "requiredIndexed": ["email", "tenantId"]
       }
     },
-    "profiles": {
-      "indexedProps": ["customerId", "preferences.language", "preferences.notifications"],
-      "base64Props": { 
-        "avatar": { 
-          "contentType": "image/png",
+    "orders": {
+      "indexedProps": ["orderId", "customerId", "tenantId", "status", "createdAt"],
+      "validation": {
+        "requiredIndexed": ["orderId", "customerId", "tenantId"]
+      }
+    },
+    "products": {
+      "indexedProps": ["sku", "tenantId", "category", "price"],
+      "base64Props": {
+        "image": {
+          "contentType": "image/jpeg",
           "preferredText": false
-        } 
+        },
+        "description": {
+          "contentType": "text/plain",
+          "preferredText": true,
+          "textCharset": "utf-8"
+        }
+      }
+    },
+    "documents": {
+      "indexedProps": ["documentId", "tenantId", "type", "status"],
+      "base64Props": {
+        "content": {
+          "contentType": "application/pdf",
+          "preferredText": false
+        }
       }
     }
+  },
+  "counterRules": {
+    "rules": [
+      {
+        "name": "user_registrations",
+        "on": ["CREATE"],
+        "scope": "meta",
+        "when": {
+          "collection": "users"
+        }
+      },
+      {
+        "name": "order_created",
+        "on": ["CREATE"],
+        "scope": "meta",
+        "when": {
+          "collection": "orders"
+        }
+      },
+      {
+        "name": "order_updated",
+        "on": ["UPDATE"],
+        "scope": "meta",
+        "when": {
+          "collection": "orders"
+        }
+      },
+      {
+        "name": "product_views",
+        "on": ["UPDATE"],
+        "scope": "payload",
+        "when": {
+          "collection": "products",
+          "payload.viewCount": { "$exists": true }
+        }
+      }
+    ]
   },
   "devShadow": {
     "enabled": true,
@@ -116,6 +239,11 @@
   },
   "versioning": {
     "enabled": true
+  },
+  "writeOptimization": {
+    "batchSize": 1000,
+    "debounceMs": 100,
+    "compressionEnabled": true
   },
   "fallback": {
     "enabled": true,

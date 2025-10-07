@@ -1,0 +1,353 @@
+{
+  "dbConnections": {
+    "mongo-primary": {
+      "mongoUri": "mongodb+srv://user:pass@primary-cluster.mongodb.net/?retryWrites=true&w=majority"
+    },
+    "mongo-healthcare": {
+      "mongoUri": "mongodb+srv://user:pass@healthcare-cluster.mongodb.net/?retryWrites=true&w=majority"
+    },
+    "mongo-finance": {
+      "mongoUri": "mongodb+srv://user:pass@finance-cluster.mongodb.net/?retryWrites=true&w=majority"
+    },
+    "mongo-analytics": {
+      "mongoUri": "mongodb+srv://user:pass@analytics-cluster.mongodb.net/?retryWrites=true&w=majority"
+    },
+    "mongo-logs": {
+      "mongoUri": "mongodb+srv://user:pass@logs-cluster.mongodb.net/?retryWrites=true&w=majority"
+    }
+  },
+  "spacesConnections": {
+    "s3-primary": {
+      "endpoint": "https://s3.amazonaws.com",
+      "region": "us-east-1",
+      "accessKey": "YOUR_AWS_ACCESS_KEY_ID",
+      "secretKey": "YOUR_AWS_SECRET_ACCESS_KEY"
+    },
+    "s3-healthcare": {
+      "endpoint": "https://s3.amazonaws.com",
+      "region": "us-east-1",
+      "accessKey": "YOUR_HEALTHCARE_ACCESS_KEY_ID",
+      "secretKey": "YOUR_HEALTHCARE_SECRET_ACCESS_KEY"
+    },
+    "s3-finance": {
+      "endpoint": "https://s3.amazonaws.com",
+      "region": "us-west-2",
+      "accessKey": "YOUR_FINANCE_ACCESS_KEY_ID",
+      "secretKey": "YOUR_FINANCE_SECRET_ACCESS_KEY"
+    },
+    "s3-analytics": {
+      "endpoint": "https://s3.amazonaws.com",
+      "region": "us-west-2",
+      "accessKey": "YOUR_ANALYTICS_ACCESS_KEY_ID",
+      "secretKey": "YOUR_ANALYTICS_SECRET_ACCESS_KEY"
+    }
+  },
+  "databases": {
+    "metadata": {
+      "genericDatabase": {
+        "dbConnRef": "mongo-primary",
+        "spaceConnRef": "s3-primary",
+        "bucket": "chronos-metadata-generic",
+        "dbName": "chronos_metadata_generic"
+      },
+      "domainsDatabases": [
+        {
+          "domain": "healthcare",
+          "dbConnRef": "mongo-healthcare",
+          "spaceConnRef": "s3-healthcare",
+          "bucket": "chronos-metadata-healthcare",
+          "dbName": "chronos_metadata_healthcare"
+        },
+        {
+          "domain": "finance",
+          "dbConnRef": "mongo-finance",
+          "spaceConnRef": "s3-finance",
+          "bucket": "chronos-metadata-finance",
+          "dbName": "chronos_metadata_finance"
+        }
+      ],
+      "tenantDatabases": [
+        {
+          "tenantId": "healthcare-provider-a",
+          "dbConnRef": "mongo-healthcare",
+          "spaceConnRef": "s3-healthcare",
+          "bucket": "chronos-metadata-hc-provider-a",
+          "dbName": "chronos_metadata_hc_provider_a"
+        },
+        {
+          "tenantId": "healthcare-provider-b",
+          "dbConnRef": "mongo-healthcare",
+          "spaceConnRef": "s3-healthcare",
+          "bucket": "chronos-metadata-hc-provider-b",
+          "dbName": "chronos_metadata_hc_provider_b"
+        },
+        {
+          "tenantId": "bank-a",
+          "dbConnRef": "mongo-finance",
+          "spaceConnRef": "s3-finance",
+          "bucket": "chronos-metadata-bank-a",
+          "dbName": "chronos_metadata_bank_a"
+        },
+        {
+          "tenantId": "bank-b",
+          "dbConnRef": "mongo-finance",
+          "spaceConnRef": "s3-finance",
+          "bucket": "chronos-metadata-bank-b",
+          "dbName": "chronos_metadata_bank_b"
+        }
+      ]
+    },
+    "knowledge": {
+      "genericDatabase": {
+        "dbConnRef": "mongo-primary",
+        "spaceConnRef": "s3-primary",
+        "bucket": "chronos-knowledge-generic",
+        "dbName": "chronos_knowledge_generic"
+      },
+      "domainsDatabases": [
+        {
+          "domain": "healthcare",
+          "dbConnRef": "mongo-healthcare",
+          "spaceConnRef": "s3-healthcare",
+          "bucket": "chronos-knowledge-healthcare",
+          "dbName": "chronos_knowledge_healthcare"
+        },
+        {
+          "domain": "finance",
+          "dbConnRef": "mongo-finance",
+          "spaceConnRef": "s3-finance",
+          "bucket": "chronos-knowledge-finance",
+          "dbName": "chronos_knowledge_finance"
+        }
+      ],
+      "tenantDatabases": [
+        {
+          "tenantId": "healthcare-provider-a",
+          "dbConnRef": "mongo-healthcare",
+          "spaceConnRef": "s3-healthcare",
+          "bucket": "chronos-knowledge-hc-provider-a",
+          "dbName": "chronos_knowledge_hc_provider_a"
+        },
+        {
+          "tenantId": "healthcare-provider-b",
+          "dbConnRef": "mongo-healthcare",
+          "spaceConnRef": "s3-healthcare",
+          "bucket": "chronos-knowledge-hc-provider-b",
+          "dbName": "chronos_knowledge_hc_provider_b"
+        },
+        {
+          "tenantId": "bank-a",
+          "dbConnRef": "mongo-finance",
+          "spaceConnRef": "s3-finance",
+          "bucket": "chronos-knowledge-bank-a",
+          "dbName": "chronos_knowledge_bank_a"
+        },
+        {
+          "tenantId": "bank-b",
+          "dbConnRef": "mongo-finance",
+          "spaceConnRef": "s3-finance",
+          "bucket": "chronos-knowledge-bank-b",
+          "dbName": "chronos_knowledge_bank_b"
+        }
+      ]
+    },
+    "runtime": {
+      "tenantDatabases": [
+        {
+          "tenantId": "healthcare-provider-a",
+          "dbConnRef": "mongo-healthcare",
+          "spaceConnRef": "s3-healthcare",
+          "bucket": "chronos-runtime-hc-provider-a",
+          "dbName": "chronos_runtime_hc_provider_a",
+          "analyticsDbName": "chronos_analytics_hc_provider_a"
+        },
+        {
+          "tenantId": "healthcare-provider-b",
+          "dbConnRef": "mongo-healthcare",
+          "spaceConnRef": "s3-healthcare",
+          "bucket": "chronos-runtime-hc-provider-b",
+          "dbName": "chronos_runtime_hc_provider_b",
+          "analyticsDbName": "chronos_analytics_hc_provider_b"
+        },
+        {
+          "tenantId": "bank-a",
+          "dbConnRef": "mongo-finance",
+          "spaceConnRef": "s3-finance",
+          "bucket": "chronos-runtime-bank-a",
+          "dbName": "chronos_runtime_bank_a",
+          "analyticsDbName": "chronos_analytics_bank_a"
+        },
+        {
+          "tenantId": "bank-b",
+          "dbConnRef": "mongo-finance",
+          "spaceConnRef": "s3-finance",
+          "bucket": "chronos-runtime-bank-b",
+          "dbName": "chronos_runtime_bank_b",
+          "analyticsDbName": "chronos_analytics_bank_b"
+        }
+      ]
+    },
+    "logs": {
+      "dbConnRef": "mongo-logs",
+      "spaceConnRef": "s3-primary",
+      "bucket": "chronos-logs",
+      "dbName": "chronos_logs"
+    }
+  },
+  "routing": {
+    "hashAlgo": "rendezvous",
+    "chooseKey": "tenantId|dbName|collection:objectId"
+  },
+  "retention": {
+    "ver": {
+      "days": 2555,
+      "maxPerItem": 10000
+    },
+    "counters": {
+      "days": 90,
+      "weeks": 52,
+      "months": 84
+    }
+  },
+  "collectionMaps": {
+    "patient_records": {
+      "indexedProps": ["patientId", "tenantId", "status", "createdAt", "lastModified"],
+      "validation": {
+        "requiredIndexed": ["patientId", "tenantId"]
+      }
+    },
+    "medical_images": {
+      "indexedProps": ["imageId", "patientId", "tenantId", "type", "date"],
+      "base64Props": {
+        "imageData": {
+          "contentType": "image/dicom",
+          "preferredText": false
+        },
+        "metadata": {
+          "contentType": "application/json",
+          "preferredText": true,
+          "textCharset": "utf-8"
+        }
+      },
+      "validation": {
+        "requiredIndexed": ["imageId", "patientId", "tenantId"]
+      }
+    },
+    "financial_transactions": {
+      "indexedProps": ["transactionId", "accountId", "tenantId", "amount", "type", "timestamp"],
+      "validation": {
+        "requiredIndexed": ["transactionId", "accountId", "tenantId"]
+      }
+    },
+    "account_statements": {
+      "indexedProps": ["statementId", "accountId", "tenantId", "period", "status"],
+      "base64Props": {
+        "statementPdf": {
+          "contentType": "application/pdf",
+          "preferredText": false
+        }
+      },
+      "validation": {
+        "requiredIndexed": ["statementId", "accountId", "tenantId"]
+      }
+    },
+    "audit_logs": {
+      "indexedProps": ["logId", "tenantId", "userId", "action", "timestamp", "ipAddress"],
+      "validation": {
+        "requiredIndexed": ["logId", "tenantId", "userId"]
+      }
+    },
+    "compliance_documents": {
+      "indexedProps": ["documentId", "tenantId", "type", "status", "expiryDate"],
+      "base64Props": {
+        "document": {
+          "contentType": "application/pdf",
+          "preferredText": false
+        }
+      },
+      "validation": {
+        "requiredIndexed": ["documentId", "tenantId"]
+      }
+    }
+  },
+  "counterRules": {
+    "rules": [
+      {
+        "name": "patient_records_created",
+        "on": ["CREATE"],
+        "scope": "meta",
+        "when": {
+          "collection": "patient_records"
+        }
+      },
+      {
+        "name": "medical_images_uploaded",
+        "on": ["CREATE"],
+        "scope": "meta",
+        "when": {
+          "collection": "medical_images"
+        }
+      },
+      {
+        "name": "financial_transactions_processed",
+        "on": ["CREATE"],
+        "scope": "meta",
+        "when": {
+          "collection": "financial_transactions"
+        }
+      },
+      {
+        "name": "account_statements_generated",
+        "on": ["CREATE"],
+        "scope": "meta",
+        "when": {
+          "collection": "account_statements"
+        }
+      },
+      {
+        "name": "audit_logs_created",
+        "on": ["CREATE"],
+        "scope": "meta",
+        "when": {
+          "collection": "audit_logs"
+        }
+      },
+      {
+        "name": "compliance_documents_updated",
+        "on": ["UPDATE"],
+        "scope": "payload",
+        "when": {
+          "collection": "compliance_documents",
+          "payload.status": { "$in": ["approved", "rejected", "expired"] }
+        }
+      }
+    ]
+  },
+  "devShadow": {
+    "enabled": false,
+    "ttlHours": 0,
+    "maxBytesPerDoc": 0
+  },
+  "logicalDelete": {
+    "enabled": true
+  },
+  "versioning": {
+    "enabled": true
+  },
+  "writeOptimization": {
+    "batchSize": 10000,
+    "debounceMs": 50,
+    "compressionEnabled": true
+  },
+  "fallback": {
+    "enabled": true,
+    "maxRetries": 5,
+    "retryDelayMs": 5000,
+    "maxDelayMs": 300000,
+    "deadLetterCollection": "chronos_fallback_dead"
+  },
+  "transactions": {
+    "enabled": true,
+    "autoDetect": true
+  }
+}

@@ -5,26 +5,90 @@ import type { ChronosConfig } from '../config.js';
 // Enhanced Validation Schemas
 // ============================================================================
 
-export const SpacesConnSchema = z.object({
-  key: z.string().min(1, 'S3 connection key is required'),
+// MongoDB connection schema
+export const DbConnectionSchema = z.object({
+  mongoUri: z.string().min(1, 'MongoDB URI is required'),
+});
+
+// S3-compatible storage connection schema
+export const SpacesConnectionSchema = z.object({
   endpoint: z.string().url('Invalid S3 endpoint URL'),
   region: z.string().min(1, 'Region is required'),
   accessKey: z.string().min(1, 'Access key is required'),
   secretKey: z.string().min(1, 'Secret key is required'),
-        buckets: z.object({
-          json: z.string().min(1, 'JSON bucket is required'),
-          content: z.string().min(1, 'Content bucket is required'),
-          versions: z.string().min(1, 'Versions bucket is required'),
-          backup: z.string().min(1, 'Backup bucket is required').optional(),
-        }),
   forcePathStyle: z.boolean().optional(),
 });
 
+// Generic database schema
+export const GenericDatabaseSchema = z.object({
+  dbConnRef: z.string().min(1, 'Database connection reference is required'),
+  spaceConnRef: z.string().min(1, 'Spaces connection reference is required'),
+  bucket: z.string().min(1, 'Bucket name is required'),
+  dbName: z.string().min(1, 'Database name is required'),
+});
+
+// Domain database schema
+export const DomainDatabaseSchema = z.object({
+  domain: z.string().min(1, 'Domain identifier is required'),
+  dbConnRef: z.string().min(1, 'Database connection reference is required'),
+  spaceConnRef: z.string().min(1, 'Spaces connection reference is required'),
+  bucket: z.string().min(1, 'Bucket name is required'),
+  dbName: z.string().min(1, 'Database name is required'),
+});
+
+// Tenant database schema
+export const TenantDatabaseSchema = z.object({
+  tenantId: z.string().min(1, 'Tenant ID is required'),
+  dbConnRef: z.string().min(1, 'Database connection reference is required'),
+  spaceConnRef: z.string().min(1, 'Spaces connection reference is required'),
+  bucket: z.string().min(1, 'Bucket name is required'),
+  dbName: z.string().min(1, 'Database name is required'),
+});
+
+// Runtime tenant database schema (includes analytics)
+export const RuntimeTenantDatabaseSchema = z.object({
+  tenantId: z.string().min(1, 'Tenant ID is required'),
+  dbConnRef: z.string().min(1, 'Database connection reference is required'),
+  spaceConnRef: z.string().min(1, 'Spaces connection reference is required'),
+  bucket: z.string().min(1, 'Bucket name is required'),
+  dbName: z.string().min(1, 'Database name is required'),
+  analyticsDbName: z.string().min(1, 'Analytics database name is required'),
+});
+
+// Logs database schema
+export const LogsDatabaseSchema = z.object({
+  dbConnRef: z.string().min(1, 'Database connection reference is required'),
+  spaceConnRef: z.string().min(1, 'Spaces connection reference is required'),
+  bucket: z.string().min(1, 'Bucket name is required'),
+  dbName: z.string().min(1, 'Database name is required'),
+});
+
+// Metadata databases schema
+export const MetadataDatabasesSchema = z.object({
+  genericDatabase: GenericDatabaseSchema,
+  domainsDatabases: z.array(DomainDatabaseSchema),
+  tenantDatabases: z.array(TenantDatabaseSchema),
+});
+
+// Knowledge databases schema
+export const KnowledgeDatabasesSchema = z.object({
+  genericDatabase: GenericDatabaseSchema,
+  domainsDatabases: z.array(DomainDatabaseSchema),
+  tenantDatabases: z.array(TenantDatabaseSchema),
+});
+
+// Runtime databases schema
+export const RuntimeDatabasesSchema = z.object({
+  tenantDatabases: z.array(RuntimeTenantDatabaseSchema),
+});
+
+// Routing schema
 export const RoutingSchema = z.object({
   hashAlgo: z.enum(['rendezvous', 'jump']).default('rendezvous'),
   chooseKey: z.string().optional(),
 });
 
+// Retention schema
 export const RetentionSchema = z.object({
   ver: z.object({
     days: z.number().int().positive().optional(),
@@ -37,8 +101,10 @@ export const RetentionSchema = z.object({
   }).partial().default({}),
 });
 
+// Counter predicate schema
 export const CounterPredicateSchema = z.record(z.any());
 
+// Counter rule schema
 export const CounterRuleSchema = z.object({
   name: z.string().min(1, 'Rule name is required'),
   on: z.array(z.enum(['CREATE', 'UPDATE', 'DELETE'])).optional(),
@@ -46,12 +112,14 @@ export const CounterRuleSchema = z.object({
   when: CounterPredicateSchema,
 });
 
+// Counters rules schema
 export const CountersRulesSchema = z.object({
   rules: z.array(CounterRuleSchema).optional(),
 }).default({});
 
+// Collection map schema
 export const CollectionMapSchema = z.object({
-  indexedProps: z.array(z.string().min(1, 'Indexed property name cannot be empty')), // Allow empty array for auto-indexing
+  indexedProps: z.array(z.string().min(1, 'Indexed property name cannot be empty')),
   base64Props: z.record(z.object({
     contentType: z.string().min(1, 'Content type is required'),
     preferredText: z.boolean().optional(),
@@ -72,44 +140,20 @@ export const VersioningConfigSchema = z.object({
   enabled: z.boolean().default(true),
 });
 
-// MongoDB connection schema
-export const MongoConnSchema = z.object({
-  key: z.string().min(1, 'MongoDB connection key is required'),
-  mongoUri: z.string().min(1, 'MongoDB URI is required'),
-});
-
-// Database connection schema
-export const DatabaseConnectionSchema = z.object({
-  key: z.string().min(1, 'Database key is required'),
-  mongoConnKey: z.string().min(1, 'MongoDB connection key is required'),
-  dbName: z.string().min(1, 'Database name is required'),
-  tenantId: z.string().optional(),
-  spacesConnKey: z.string().optional(),
-});
-
-// Logs database schema (no tiers - simple flat structure)
-export const LogsDatabaseConfigSchema = z.object({
-  connection: DatabaseConnectionSchema,
-});
-
 // Main configuration schema
 export const ChronosConfigSchema = z.object({
-  mongoConns: z.array(MongoConnSchema).min(1, 'At least one MongoDB connection is required'),
+  dbConnections: z.record(DbConnectionSchema),
+  spacesConnections: z.record(SpacesConnectionSchema),
   databases: z.object({
-    metadata: z.array(DatabaseConnectionSchema).optional(),
-    knowledge: z.array(DatabaseConnectionSchema).optional(),
-    runtime: z.array(DatabaseConnectionSchema).optional(),
-    logs: LogsDatabaseConfigSchema.optional(),
+    metadata: MetadataDatabasesSchema.optional(),
+    knowledge: KnowledgeDatabasesSchema.optional(),
+    runtime: RuntimeDatabasesSchema.optional(),
+    logs: LogsDatabaseSchema.optional(),
   }),
-  spacesConns: z.array(SpacesConnSchema).max(10, 'Maximum 10 S3 connections allowed').optional(),
   localStorage: z.object({
     basePath: z.string().min(1, 'Base path is required for local storage'),
     enabled: z.boolean(),
   }).optional(),
-  counters: z.object({ 
-    mongoUri: z.string().min(1, 'Counters MongoDB URI is required'), 
-    dbName: z.string().min(1, 'Counters database name is required') 
-  }).optional(), // Made optional
   routing: RoutingSchema.default({ hashAlgo: 'rendezvous' }),
   retention: RetentionSchema.default({}),
   rollup: z.any().optional(),
@@ -127,29 +171,6 @@ export const ChronosConfigSchema = z.object({
   logicalDelete: LogicalDeleteConfigSchema.optional(),
   versioning: VersioningConfigSchema.optional(),
 }).superRefine((cfg, ctx) => {
-  // Validate that either spacesConns, localStorage, or individual connection spacesConn is provided
-  const hasGlobalSpacesConns = cfg.spacesConns && cfg.spacesConns.length > 0;
-  const hasLocalStorage = cfg.localStorage?.enabled;
-  
-  // Check if any database connection has its own S3 config
-  const hasIndividualS3Configs = (() => {
-    const checkConnection = (conn: any) => conn && conn.spacesConn;
-    const checkArray = (arr: any) => arr && arr.some(checkConnection);
-    const checkLogs = (logs: any) => logs && logs.connection && logs.connection.spacesConn;
-    
-    return checkArray(cfg.databases.metadata) ||
-           checkArray(cfg.databases.knowledge) ||
-           checkArray(cfg.databases.runtime) ||
-           checkLogs(cfg.databases.logs);
-  })();
-  
-  if (!hasGlobalSpacesConns && !hasLocalStorage && !hasIndividualS3Configs) {
-    ctx.addIssue({ 
-      code: z.ZodIssueCode.custom, 
-      message: 'Either global spacesConns, localStorage, or individual connection spacesConn must be configured.' 
-    });
-  }
-  
   // Validate that at least one database type is configured
   const hasDatabases = cfg.databases.metadata || cfg.databases.knowledge || cfg.databases.runtime || cfg.databases.logs;
   if (!hasDatabases) {
@@ -158,6 +179,68 @@ export const ChronosConfigSchema = z.object({
       message: 'At least one database type (metadata, knowledge, runtime, or logs) must be configured.' 
     });
   }
+  
+  // Validate that all referenced connections exist
+  const allDbConnRefs = new Set<string>();
+  const allSpaceConnRefs = new Set<string>();
+  
+  // Collect all references
+  if (cfg.databases.metadata) {
+    allDbConnRefs.add(cfg.databases.metadata.genericDatabase.dbConnRef);
+    allSpaceConnRefs.add(cfg.databases.metadata.genericDatabase.spaceConnRef);
+    cfg.databases.metadata.domainsDatabases.forEach((db: any) => {
+      allDbConnRefs.add(db.dbConnRef);
+      allSpaceConnRefs.add(db.spaceConnRef);
+    });
+    cfg.databases.metadata.tenantDatabases.forEach((db: any) => {
+      allDbConnRefs.add(db.dbConnRef);
+      allSpaceConnRefs.add(db.spaceConnRef);
+    });
+  }
+  
+  if (cfg.databases.knowledge) {
+    allDbConnRefs.add(cfg.databases.knowledge.genericDatabase.dbConnRef);
+    allSpaceConnRefs.add(cfg.databases.knowledge.genericDatabase.spaceConnRef);
+    cfg.databases.knowledge.domainsDatabases.forEach((db: any) => {
+      allDbConnRefs.add(db.dbConnRef);
+      allSpaceConnRefs.add(db.spaceConnRef);
+    });
+    cfg.databases.knowledge.tenantDatabases.forEach((db: any) => {
+      allDbConnRefs.add(db.dbConnRef);
+      allSpaceConnRefs.add(db.spaceConnRef);
+    });
+  }
+  
+  if (cfg.databases.runtime) {
+    cfg.databases.runtime.tenantDatabases.forEach((db: any) => {
+      allDbConnRefs.add(db.dbConnRef);
+      allSpaceConnRefs.add(db.spaceConnRef);
+    });
+  }
+  
+  if (cfg.databases.logs) {
+    allDbConnRefs.add(cfg.databases.logs.dbConnRef);
+    allSpaceConnRefs.add(cfg.databases.logs.spaceConnRef);
+  }
+  
+  // Check that all referenced connections exist
+  allDbConnRefs.forEach(ref => {
+    if (!cfg.dbConnections[ref]) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Referenced database connection '${ref}' does not exist in dbConnections.`
+      });
+    }
+  });
+  
+  allSpaceConnRefs.forEach(ref => {
+    if (!cfg.spacesConnections[ref]) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Referenced spaces connection '${ref}' does not exist in spacesConnections.`
+      });
+    }
+  });
 });
 
 

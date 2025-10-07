@@ -1,0 +1,151 @@
+{
+  "dbConnections": {
+    "mongo-dev": {
+      "mongoUri": "mongodb://localhost:27017/?retryWrites=true&w=majority"
+    }
+  },
+  "spacesConnections": {
+    "local-storage": {
+      "endpoint": "http://localhost:9000",
+      "region": "us-east-1",
+      "accessKey": "minioadmin",
+      "secretKey": "minioadmin",
+      "forcePathStyle": true
+    }
+  },
+  "databases": {
+    "metadata": {
+      "genericDatabase": {
+        "dbConnRef": "mongo-dev",
+        "spaceConnRef": "local-storage",
+        "bucket": "chronos-metadata",
+        "dbName": "chronos_metadata_generic"
+      },
+      "domainsDatabases": [],
+      "tenantDatabases": [
+        {
+          "tenantId": "dev-tenant",
+          "dbConnRef": "mongo-dev",
+          "spaceConnRef": "local-storage",
+          "bucket": "chronos-metadata-dev",
+          "dbName": "chronos_metadata_dev"
+        }
+      ]
+    },
+    "knowledge": {
+      "genericDatabase": {
+        "dbConnRef": "mongo-dev",
+        "spaceConnRef": "local-storage",
+        "bucket": "chronos-knowledge",
+        "dbName": "chronos_knowledge_generic"
+      },
+      "domainsDatabases": [],
+      "tenantDatabases": [
+        {
+          "tenantId": "dev-tenant",
+          "dbConnRef": "mongo-dev",
+          "spaceConnRef": "local-storage",
+          "bucket": "chronos-knowledge-dev",
+          "dbName": "chronos_knowledge_dev"
+        }
+      ]
+    },
+    "runtime": {
+      "tenantDatabases": [
+        {
+          "tenantId": "dev-tenant",
+          "dbConnRef": "mongo-dev",
+          "spaceConnRef": "local-storage",
+          "bucket": "chronos-runtime-dev",
+          "dbName": "chronos_runtime_dev",
+          "analyticsDbName": "chronos_analytics_dev"
+        }
+      ]
+    },
+    "logs": {
+      "dbConnRef": "mongo-dev",
+      "spaceConnRef": "local-storage",
+      "bucket": "chronos-logs",
+      "dbName": "chronos_logs"
+    }
+  },
+  "routing": {
+    "hashAlgo": "rendezvous",
+    "chooseKey": "tenantId|dbName|collection:objectId"
+  },
+  "retention": {
+    "ver": {
+      "days": 7,
+      "maxPerItem": 10
+    },
+    "counters": {
+      "days": 3,
+      "weeks": 2,
+      "months": 1
+    }
+  },
+  "collectionMaps": {
+    "users": {
+      "indexedProps": ["email", "tenantId", "status"],
+      "validation": {
+        "requiredIndexed": ["email", "tenantId"]
+      }
+    },
+    "posts": {
+      "indexedProps": ["title", "tenantId", "status", "createdAt"],
+      "base64Props": {
+        "content": {
+          "contentType": "text/markdown",
+          "preferredText": true,
+          "textCharset": "utf-8"
+        }
+      }
+    }
+  },
+  "counterRules": {
+    "rules": [
+      {
+        "name": "users_created",
+        "on": ["CREATE"],
+        "scope": "meta",
+        "when": {
+          "collection": "users"
+        }
+      },
+      {
+        "name": "posts_created",
+        "on": ["CREATE"],
+        "scope": "meta",
+        "when": {
+          "collection": "posts"
+        }
+      }
+    ]
+  },
+  "devShadow": {
+    "enabled": true,
+    "ttlHours": 1,
+    "maxBytesPerDoc": 1024
+  },
+  "logicalDelete": {
+    "enabled": true
+  },
+  "versioning": {
+    "enabled": true
+  },
+  "writeOptimization": {
+    "batchSize": 10,
+    "debounceMs": 1000,
+    "compressionEnabled": false
+  },
+  "fallback": {
+    "enabled": false,
+    "maxRetries": 1,
+    "retryDelayMs": 5000,
+    "maxDelayMs": 10000
+  },
+  "transactions": {
+    "enabled": true,
+    "autoDetect": true
+  }
+}

@@ -1,6 +1,6 @@
 import { MongoClient } from 'mongodb';
 import { BridgeRouter } from '../router/router.js';
-import type { ChronosConfig } from '../config.js';
+import type { ChronosConfig, RouteContext } from '../config.js';
 
 // ============================================================================
 // Types
@@ -34,24 +34,22 @@ export interface BackendInfo {
  */
 export async function health(router: BridgeRouter, config: ChronosConfig): Promise<HealthReport> {
   const timestamp = new Date().toISOString();
-  const backends = await listBackends(router);
+  
+  // Get all MongoDB URIs
+  const mongoUris = router.getAllMongoUris();
   
   // Check MongoDB backends
   const mongoBackends = await Promise.all(
-    backends.map(async (backend) => {
+    mongoUris.map(async (mongoUri, index) => {
       try {
         const start = Date.now();
-        const mongoClient = await router.getMongo(backend.index);
-        if (!mongoClient) {
-          return { index: backend.index, ok: false, error: 'MongoDB client not available' };
-        }
-        
+        const mongoClient = await router.getMongoClient(mongoUri);
         await mongoClient.db('admin').admin().ping();
         const pingMs = Date.now() - start;
-        return { index: backend.index, ok: true, pingMs };
+        return { index, ok: true, pingMs };
       } catch (error) {
         return { 
-          index: backend.index, 
+          index, 
           ok: false, 
           error: error instanceof Error ? error.message : 'Unknown error' 
         };
@@ -59,26 +57,23 @@ export async function health(router: BridgeRouter, config: ChronosConfig): Promi
     })
   );
 
-  // Check storage backends (S3 or LocalStorage)
+  // Check storage backends (simplified - just check if we can get spaces)
   const s3Backends = await Promise.all(
-    backends.map(async (backend) => {
+    Object.keys(config.spacesConnections).map(async (_, index) => {
       try {
-        const storage = router.getStorage(backend.index);
-        if (!storage) {
-          return { index: backend.index, ok: false, error: 'Storage not available' };
-        }
+        // Create a test context to get storage
+        const testCtx: RouteContext = {
+          dbName: 'test',
+          collection: 'test',
+          databaseType: 'runtime',
+          tenantId: 'test'
+        };
         
-        const spaces = router.getSpaces(backend.index);
-        if (!spaces) {
-          return { index: backend.index, ok: false, error: 'Storage config not available' };
-        }
-        
-        // Lightweight check - try to list objects
-        await storage.list(spaces.buckets.json, '', { maxKeys: 1 });
-        return { index: backend.index, ok: true };
+        await router.getSpaces(testCtx);
+        return { index, ok: true };
       } catch (error) {
         return { 
-          index: backend.index, 
+          index, 
           ok: false, 
           error: error instanceof Error ? error.message : 'Unknown error' 
         };
@@ -86,17 +81,24 @@ export async function health(router: BridgeRouter, config: ChronosConfig): Promi
     })
   );
 
-  // Check counters database (if configured)
+  // Check analytics databases (if configured in runtime)
   let countersDb: { ok: boolean; pingMs?: number; error?: string } | null = null;
-  if (config.counters) {
+  if (config.databases.runtime?.tenantDatabases) {
     try {
       const start = Date.now();
-      const countersClient = new MongoClient(config.counters.mongoUri);
-      await countersClient.connect();
-      await countersClient.db('admin').admin().ping();
-      const pingMs = Date.now() - start;
-      await countersClient.close();
-      countersDb = { ok: true, pingMs };
+      // Check the first analytics database as a representative
+      const firstTenantDb = config.databases.runtime.tenantDatabases[0];
+      if (firstTenantDb) {
+        const dbConn = config.dbConnections[firstTenantDb.dbConnRef];
+        if (dbConn) {
+          const countersClient = new MongoClient(dbConn.mongoUri);
+          await countersClient.connect();
+          await countersClient.db('admin').admin().ping();
+          const pingMs = Date.now() - start;
+          await countersClient.close();
+          countersDb = { ok: true, pingMs };
+        }
+      }
     } catch (error) {
       countersDb = { 
         ok: false, 
@@ -107,7 +109,13 @@ export async function health(router: BridgeRouter, config: ChronosConfig): Promi
 
   return {
     timestamp,
-    router: { backends },
+    router: { 
+      backends: mongoUris.map((mongoUri, index) => ({
+        index,
+        mongoUri,
+        s3Endpoint: Object.values(config.spacesConnections)[index]?.endpoint || 'unknown'
+      }))
+    },
     mongoBackends,
     s3Backends,
     countersDb,
@@ -115,36 +123,13 @@ export async function health(router: BridgeRouter, config: ChronosConfig): Promi
 }
 
 /**
- * List all backends
- * @param router - Bridge router instance
- * @returns List of backend information
- */
-export async function listBackends(router: BridgeRouter): Promise<BackendInfo[]> {
-  const backends = router.listBackends();
-  return backends.map((backend, index) => ({
-    index,
-    mongoUri: backend.mongoUri,
-    s3Endpoint: backend.endpoint,
-  }));
-}
-
-/**
  * Shutdown all connections
  * @param router - Bridge router instance
  * @param config - Chronos configuration
  */
-export async function shutdown(router: BridgeRouter, config: ChronosConfig): Promise<void> {
+export async function shutdown(router: BridgeRouter, _config: ChronosConfig): Promise<void> {
   // Shutdown router (closes all MongoDB connections)
   await router.shutdown();
   
-  // Close counters database connection (if configured)
-  if (config.counters) {
-    try {
-      const countersClient = new MongoClient(config.counters.mongoUri);
-      await countersClient.close();
-    } catch (error) {
-      // Log but don't throw - shutdown should be best effort
-      console.error('Failed to close counters database:', error);
-    }
-  }
+  // Analytics databases are managed by the router, so no additional cleanup needed
 }

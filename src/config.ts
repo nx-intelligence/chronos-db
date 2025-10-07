@@ -17,11 +17,17 @@ export interface LocalStorageConfig {
 }
 
 /**
- * S3-compatible storage connection configuration
+ * MongoDB connection configuration - define once, reference everywhere
  */
-export interface SpacesConnConfig {
-  /** Unique key for referencing this S3 connection */
-  key: string;
+export interface DbConnection {
+  /** MongoDB connection URI */
+  mongoUri: string;
+}
+
+/**
+ * S3-compatible storage connection configuration - define once, reference everywhere
+ */
+export interface SpacesConnection {
   /** S3 endpoint URL */
   endpoint: string;
   /** AWS region */
@@ -30,62 +36,85 @@ export interface SpacesConnConfig {
   accessKey: string;
   /** Secret key */
   secretKey: string;
-  /** Bucket configuration */
-  buckets: {
-    /** Bucket for JSON data (chronos-jsons) */
-    json: string;
-    /** Bucket for content files */
-    content: string;
-    /** Bucket for versions/manifests */
-    versions: string;
-    /** Bucket for backups (optional - can reuse json bucket) */
-    backup?: string;
-  };
   /** Force path style (for MinIO) */
   forcePathStyle?: boolean;
 }
 
 /**
- * MongoDB connection configuration
+ * Generic database configuration (no tenant/domain)
  */
-export interface MongoConnConfig {
-  /** Unique key for referencing this MongoDB connection */
-  key: string;
-  /** MongoDB connection URI */
-  mongoUri: string;
-}
-
-/**
- * Database connection configuration
- */
-export interface DatabaseConnection {
-  /** Globally unique identifier for direct routing */
-  key: string;
-  /** MongoDB connection key - references a connection in mongoConns array */
-  mongoConnKey: string;
-  /** Database name */
+export interface GenericDatabase {
+  /** MongoDB connection reference */
+  dbConnRef: string;
+  /** S3 spaces connection reference */
+  spaceConnRef: string;
+  /** S3 bucket name */
+  bucket: string;
+  /** MongoDB database name */
   dbName: string;
-  /** Optional tenant ID for mapping */
-  tenantId?: string;
-  /** S3 spaces connection key - references a connection in spacesConns array */
-  spacesConnKey?: string;
 }
 
 /**
- * Logs database configuration (no tiers - simple flat structure)
+ * Domain-specific database configuration
  */
-export interface LogsDatabaseConfig {
-  /** Single MongoDB connection for logs */
-  connection: DatabaseConnection;
+export interface DomainDatabase {
+  /** Domain identifier */
+  domain: string;
+  /** MongoDB connection reference */
+  dbConnRef: string;
+  /** S3 spaces connection reference */
+  spaceConnRef: string;
+  /** S3 bucket name */
+  bucket: string;
+  /** MongoDB database name */
+  dbName: string;
 }
 
 /**
- * Counters configuration
+ * Tenant-specific database configuration
  */
-export interface CountersConfig {
-  /** MongoDB URI for counters */
-  mongoUri: string;
-  /** Database name for counters */
+export interface TenantDatabase {
+  /** Tenant identifier */
+  tenantId: string;
+  /** MongoDB connection reference */
+  dbConnRef: string;
+  /** S3 spaces connection reference */
+  spaceConnRef: string;
+  /** S3 bucket name */
+  bucket: string;
+  /** MongoDB database name */
+  dbName: string;
+}
+
+/**
+ * Runtime tenant database configuration (includes analytics)
+ */
+export interface RuntimeTenantDatabase {
+  /** Tenant identifier */
+  tenantId: string;
+  /** MongoDB connection reference */
+  dbConnRef: string;
+  /** S3 spaces connection reference */
+  spaceConnRef: string;
+  /** S3 bucket name */
+  bucket: string;
+  /** MongoDB database name */
+  dbName: string;
+  /** Analytics database name */
+  analyticsDbName: string;
+}
+
+/**
+ * Logs database configuration (simple flat structure)
+ */
+export interface LogsDatabase {
+  /** MongoDB connection reference */
+  dbConnRef: string;
+  /** S3 spaces connection reference */
+  spaceConnRef: string;
+  /** S3 bucket name */
+  bucket: string;
+  /** MongoDB database name */
   dbName: string;
 }
 
@@ -243,20 +272,39 @@ export interface TransactionConfig {
  */
 export interface ChronosConfig {
   /** MongoDB connections - define once, reference by key */
-  mongoConns: MongoConnConfig[];
-  /** Database configuration - can have empty sections */
+  dbConnections: Record<string, DbConnection>;
+  /** S3-compatible storage connections - define once, reference by key */
+  spacesConnections: Record<string, SpacesConnection>;
+  /** Database configuration with tiered structure */
   databases: {
-    metadata?: DatabaseConnection[];
-    knowledge?: DatabaseConnection[];
-    runtime?: DatabaseConnection[];
-    logs?: LogsDatabaseConfig;
+    /** Metadata databases with 3 tiers: generic, domains, tenants */
+    metadata?: {
+      /** Generic metadata database (no tenant/domain) */
+      genericDatabase: GenericDatabase;
+      /** Domain-specific metadata databases */
+      domainsDatabases: DomainDatabase[];
+      /** Tenant-specific metadata databases */
+      tenantDatabases: TenantDatabase[];
+    };
+    /** Knowledge databases with 3 tiers: generic, domains, tenants */
+    knowledge?: {
+      /** Generic knowledge database (no tenant/domain) */
+      genericDatabase: GenericDatabase;
+      /** Domain-specific knowledge databases */
+      domainsDatabases: DomainDatabase[];
+      /** Tenant-specific knowledge databases */
+      tenantDatabases: TenantDatabase[];
+    };
+    /** Runtime databases with tenant tier only */
+    runtime?: {
+      /** Tenant-specific runtime databases (includes analytics) */
+      tenantDatabases: RuntimeTenantDatabase[];
+    };
+    /** Logs database (simple flat structure) */
+    logs?: LogsDatabase;
   };
-  /** 1-10 S3-compatible storage connections (optional if using localStorage) */
-  spacesConns?: SpacesConnConfig[] | undefined;
   /** Local filesystem storage (for development/testing, NOT recommended for production) */
   localStorage?: LocalStorageConfig | undefined;
-  /** Separate MongoDB connection for counters (optional - skips counter functionality if not provided) */
-  counters?: CountersConfig;
   /** How to route requests across backends */
   routing: RoutingConfig;
   /** Retention policies for versions and counters (optional, defaults to disabled) */
@@ -300,9 +348,11 @@ export interface RouteContext {
   /** Database type */
   databaseType?: 'metadata' | 'knowledge' | 'runtime' | 'logs';
   /** Tier */
-  tier?: 'domain' | 'tenant';
+  tier?: 'generic' | 'domain' | 'tenant';
   /** Tenant ID */
   tenantId?: string;
+  /** Domain identifier */
+  domain?: string;
 }
 
 // ============================================================================
@@ -325,18 +375,19 @@ export async function validateTransactionConfig(config: Partial<ChronosConfig>):
     // Check if MongoDB supports transactions
     // Get first available MongoDB URI from databases
     let mongoUri: string | undefined;
-    if (config.databases?.metadata?.[0] && config.mongoConns) {
-      const mongoConn = config.mongoConns.find(conn => conn.key === config.databases?.metadata?.[0]?.mongoConnKey);
-      if (mongoConn) mongoUri = mongoConn.mongoUri;
-    } else if (config.databases?.knowledge?.[0] && config.mongoConns) {
-      const mongoConn = config.mongoConns.find(conn => conn.key === config.databases?.knowledge?.[0]?.mongoConnKey);
-      if (mongoConn) mongoUri = mongoConn.mongoUri;
-    } else if (config.databases?.runtime?.[0] && config.mongoConns) {
-      const mongoConn = config.mongoConns.find(conn => conn.key === config.databases?.runtime?.[0]?.mongoConnKey);
-      if (mongoConn) mongoUri = mongoConn.mongoUri;
-    } else if (config.databases?.logs?.connection && config.mongoConns) {
-      const mongoConn = config.mongoConns.find(conn => conn.key === config.databases?.logs?.connection?.mongoConnKey);
-      if (mongoConn) mongoUri = mongoConn.mongoUri;
+    
+    if (config.databases?.metadata?.genericDatabase && config.dbConnections) {
+      const dbConn = config.dbConnections[config.databases.metadata.genericDatabase.dbConnRef];
+      if (dbConn) mongoUri = dbConn.mongoUri;
+    } else if (config.databases?.knowledge?.genericDatabase && config.dbConnections) {
+      const dbConn = config.dbConnections[config.databases.knowledge.genericDatabase.dbConnRef];
+      if (dbConn) mongoUri = dbConn.mongoUri;
+    } else if (config.databases?.runtime?.tenantDatabases?.[0] && config.dbConnections) {
+      const dbConn = config.dbConnections[config.databases.runtime.tenantDatabases[0].dbConnRef];
+      if (dbConn) mongoUri = dbConn.mongoUri;
+    } else if (config.databases?.logs && config.dbConnections) {
+      const dbConn = config.dbConnections[config.databases.logs.dbConnRef];
+      if (dbConn) mongoUri = dbConn.mongoUri;
     }
 
     if (!mongoUri) {
@@ -379,7 +430,7 @@ export function validateChronosConfig(config: unknown): ChronosConfig {
     
     logger.debug('Chronos configuration validation completed successfully', {
       databasesCount: Object.keys(resolved.databases).length,
-      hasSpacesConns: !!resolved.spacesConns && resolved.spacesConns.length > 0,
+      hasSpacesConnections: !!resolved.spacesConnections && Object.keys(resolved.spacesConnections).length > 0,
       localStorageEnabled: resolved.localStorage?.enabled,
       transactionsEnabled: resolved.transactions?.enabled,
       collectionsCount: Object.keys(resolved.collectionMaps).length

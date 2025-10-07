@@ -1,75 +1,212 @@
 {
-  "mongoConns": [
-    {
-      "key": "mongo-local",
-      "mongoUri": "mongodb://localhost:27017"
-    }
-  ],
-  "databases": {
-    "runtime": [
-      {
-        "key": "runtime-local",
-        "mongoConnKey": "mongo-local",
-        "tenantId": "local",
-        "spacesConnKey": "minio-local",
-        "dbName": "runtime_local"
-      }
-    ],
-    "logs": {
-      "connection": {
-        "key": "logs-local",
-        "mongoConnKey": "mongo-local",
-        "spacesConnKey": "minio-local",
-        "dbName": "chronos_logs"
-      }
+  "dbConnections": {
+    "mongo-local": {
+      "mongoUri": "mongodb://localhost:27017/?retryWrites=true&w=majority"
+    },
+    "mongo-dev": {
+      "mongoUri": "mongodb://dev-cluster:27017/?retryWrites=true&w=majority"
     }
   },
-  "spacesConns": [
-    {
-      "key": "minio-local",
+  "spacesConnections": {
+    "minio-local": {
       "endpoint": "http://localhost:9000",
       "region": "us-east-1",
       "accessKey": "minioadmin",
       "secretKey": "minioadmin",
-      "buckets": {
-        "json": "chronos-json",
-        "content": "chronos-content",
-        "versions": "chronos-versions",
-        "backup": "chronos-backups"
-      },
+      "forcePathStyle": true
+    },
+    "minio-dev": {
+      "endpoint": "http://dev-minio:9000",
+      "region": "us-east-1",
+      "accessKey": "devuser",
+      "secretKey": "devpass",
       "forcePathStyle": true
     }
-  ],
+  },
+  "databases": {
+    "metadata": {
+      "genericDatabase": {
+        "dbConnRef": "mongo-local",
+        "spaceConnRef": "minio-local",
+        "bucket": "chronos-metadata",
+        "dbName": "chronos_metadata_generic"
+      },
+      "domainsDatabases": [
+        {
+          "domain": "development",
+          "dbConnRef": "mongo-dev",
+          "spaceConnRef": "minio-dev",
+          "bucket": "chronos-metadata-dev",
+          "dbName": "chronos_metadata_dev"
+        }
+      ],
+      "tenantDatabases": [
+        {
+          "tenantId": "dev-tenant-1",
+          "dbConnRef": "mongo-local",
+          "spaceConnRef": "minio-local",
+          "bucket": "chronos-metadata-dev-tenant-1",
+          "dbName": "chronos_metadata_dev_tenant_1"
+        },
+        {
+          "tenantId": "dev-tenant-2",
+          "dbConnRef": "mongo-dev",
+          "spaceConnRef": "minio-dev",
+          "bucket": "chronos-metadata-dev-tenant-2",
+          "dbName": "chronos_metadata_dev_tenant_2"
+        }
+      ]
+    },
+    "knowledge": {
+      "genericDatabase": {
+        "dbConnRef": "mongo-local",
+        "spaceConnRef": "minio-local",
+        "bucket": "chronos-knowledge",
+        "dbName": "chronos_knowledge_generic"
+      },
+      "domainsDatabases": [
+        {
+          "domain": "development",
+          "dbConnRef": "mongo-dev",
+          "spaceConnRef": "minio-dev",
+          "bucket": "chronos-knowledge-dev",
+          "dbName": "chronos_knowledge_dev"
+        }
+      ],
+      "tenantDatabases": [
+        {
+          "tenantId": "dev-tenant-1",
+          "dbConnRef": "mongo-local",
+          "spaceConnRef": "minio-local",
+          "bucket": "chronos-knowledge-dev-tenant-1",
+          "dbName": "chronos_knowledge_dev_tenant_1"
+        },
+        {
+          "tenantId": "dev-tenant-2",
+          "dbConnRef": "mongo-dev",
+          "spaceConnRef": "minio-dev",
+          "bucket": "chronos-knowledge-dev-tenant-2",
+          "dbName": "chronos_knowledge_dev_tenant_2"
+        }
+      ]
+    },
+    "runtime": {
+      "tenantDatabases": [
+        {
+          "tenantId": "dev-tenant-1",
+          "dbConnRef": "mongo-local",
+          "spaceConnRef": "minio-local",
+          "bucket": "chronos-runtime-dev-tenant-1",
+          "dbName": "chronos_runtime_dev_tenant_1",
+          "analyticsDbName": "chronos_analytics_dev_tenant_1"
+        },
+        {
+          "tenantId": "dev-tenant-2",
+          "dbConnRef": "mongo-dev",
+          "spaceConnRef": "minio-dev",
+          "bucket": "chronos-runtime-dev-tenant-2",
+          "dbName": "chronos_runtime_dev_tenant_2",
+          "analyticsDbName": "chronos_analytics_dev_tenant_2"
+        }
+      ]
+    },
+    "logs": {
+      "dbConnRef": "mongo-local",
+      "spaceConnRef": "minio-local",
+      "bucket": "chronos-logs",
+      "dbName": "chronos_logs"
+    }
+  },
   "routing": {
     "hashAlgo": "rendezvous",
-    "chooseKey": "tenantId|dbName"
+    "chooseKey": "tenantId|dbName|collection:objectId"
   },
   "retention": {
-    "ver": { "days": 30, "maxPerItem": 10 },
-    "counters": { "days": 90, "weeks": 26, "months": 12 }
-  },
-  "rollup": {
-    "enabled": true,
-    "manifestPeriod": "weekly"
+    "ver": {
+      "days": 30,
+      "maxPerItem": 100
+    },
+    "counters": {
+      "days": 7,
+      "weeks": 4,
+      "months": 3
+    }
   },
   "collectionMaps": {
-    "testDocuments": {
-      "indexedProps": ["testId", "category"],
-      "base64Props": {
-        "data": {
-          "contentType": "application/octet-stream",
-          "preferredText": false
-        }
-      },
+    "test_data": {
+      "indexedProps": ["testId", "tenantId", "status", "createdAt"],
       "validation": {
-        "requiredIndexed": ["testId"]
+        "requiredIndexed": ["testId", "tenantId"]
+      }
+    },
+    "dev_logs": {
+      "indexedProps": ["logId", "tenantId", "level", "timestamp"],
+      "validation": {
+        "requiredIndexed": ["logId", "tenantId"]
+      }
+    },
+    "mock_users": {
+      "indexedProps": ["userId", "tenantId", "email", "role"],
+      "validation": {
+        "requiredIndexed": ["userId", "tenantId"]
+      }
+    },
+    "sample_products": {
+      "indexedProps": ["productId", "tenantId", "name", "price"],
+      "base64Props": {
+        "image": {
+          "contentType": "image/png",
+          "preferredText": false
+        },
+        "description": {
+          "contentType": "text/plain",
+          "preferredText": true,
+          "textCharset": "utf-8"
+        }
       }
     }
   },
+  "counterRules": {
+    "rules": [
+      {
+        "name": "test_data_created",
+        "on": ["CREATE"],
+        "scope": "meta",
+        "when": {
+          "collection": "test_data"
+        }
+      },
+      {
+        "name": "dev_logs_created",
+        "on": ["CREATE"],
+        "scope": "meta",
+        "when": {
+          "collection": "dev_logs"
+        }
+      },
+      {
+        "name": "mock_users_created",
+        "on": ["CREATE"],
+        "scope": "meta",
+        "when": {
+          "collection": "mock_users"
+        }
+      },
+      {
+        "name": "sample_products_updated",
+        "on": ["UPDATE"],
+        "scope": "payload",
+        "when": {
+          "collection": "sample_products",
+          "payload.price": { "$exists": true }
+        }
+      }
+    ]
+  },
   "devShadow": {
     "enabled": true,
-    "ttlHours": 12,
-    "maxBytesPerDoc": 524288
+    "ttlHours": 6,
+    "maxBytesPerDoc": 262144
   },
   "logicalDelete": {
     "enabled": true
@@ -77,11 +214,20 @@
   "versioning": {
     "enabled": true
   },
+  "writeOptimization": {
+    "batchSize": 100,
+    "debounceMs": 500,
+    "compressionEnabled": false
+  },
   "fallback": {
-    "enabled": false
+    "enabled": true,
+    "maxRetries": 2,
+    "retryDelayMs": 1000,
+    "maxDelayMs": 30000,
+    "deadLetterCollection": "chronos_fallback_dead"
   },
   "transactions": {
-    "enabled": false,
-    "autoDetect": false
+    "enabled": true,
+    "autoDetect": true
   }
 }

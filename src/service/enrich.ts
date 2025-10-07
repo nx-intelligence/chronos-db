@@ -36,8 +36,13 @@ import { executeWithTransactionSupport, isVersioningEnabled } from '../db/crud.j
 export interface EnrichContext {
   dbName: string;
   collection: string;
-  tenantId?: string;
+  objectId?: string;
   forcedIndex?: number;
+  key?: string;
+  databaseType?: 'metadata' | 'knowledge' | 'runtime' | 'logs';
+  tier?: 'generic' | 'domain' | 'tenant';
+  tenantId?: string;
+  domain?: string;
 }
 
 export interface EnrichOptions {
@@ -95,13 +100,12 @@ export async function enrichRecord(
     }
 
     // 2. Route to backend
-    const routeInfo = router.getRouteInfo(ctx);
-    const mongoClient = await router.getMongo(routeInfo.index);
+    const routeInfo = router.route(ctx);
+    const mongoClient = await router.getMongoClient(routeInfo.mongoUri);
     const mongo = mongoClient.db(ctx.dbName);
-    const storage = router.getStorage(routeInfo.index);
-    const spaces = router.getSpaces(routeInfo.index);
+    const spacesInfo = await router.getSpaces(ctx);
     
-    if (!mongo || !storage || !spaces) {
+    if (!mongo || !spacesInfo.storage) {
       throw new RouteMismatchError(
         'Backend not available',
         op,
@@ -110,7 +114,7 @@ export async function enrichRecord(
         undefined,
         undefined,
         routeInfo.index,
-        routeInfo.routingKey
+        'enrichment'
       );
     }
 
@@ -156,7 +160,7 @@ export async function enrichRecord(
     let currentData: Record<string, unknown>;
     try {
       // TODO: Check dev shadow if preferShadow is available
-      currentData = await storage.getJSON(head.jsonBucket, head.jsonKey);
+      currentData = await spacesInfo.storage.getJSON(head.jsonBucket, head.jsonKey);
     } catch (error) {
       throw new StorageError(
         `Failed to read current item.json: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -191,8 +195,8 @@ export async function enrichRecord(
     if (base64Props.length > 0) {
       try {
         const externalizeResult = await externalizeBase64({
-          storage,
-          contentBucket: spaces.buckets.content,
+          storage: spacesInfo.storage,
+          contentBucket: spacesInfo.bucket,
           collection: ctx.collection,
           idHex: id,
           ov,
@@ -222,7 +226,7 @@ export async function enrichRecord(
     let sha256: string;
 
     try {
-        const result = await storage.putJSON(spaces.buckets.json, jKey, transformed);
+        const result = await spacesInfo.storage.putJSON(spacesInfo.bucket, jKey, transformed);
       size = result.size ?? 0;
       sha256 = result.sha256 || '';
       writtenKeys.push(jKey);
@@ -259,7 +263,7 @@ export async function enrichRecord(
             at: now,
             ...(actor && { actor }),
             ...(reason && { reason }),
-            jsonBucket: spaces.buckets.json,
+            jsonBucket: spacesInfo.bucket,
             jsonKey: jKey,
             metaIndexed,
             size: size ?? 0,
@@ -277,7 +281,7 @@ export async function enrichRecord(
           itemId: new ObjectId(id),
           ov,
           cv,
-          jsonBucket: spaces.buckets.json,
+          jsonBucket: spacesInfo.bucket,
           jsonKey: jKey,
           metaIndexed,
           size: size ?? 0,
@@ -309,7 +313,7 @@ export async function enrichRecord(
       }, router);
     } catch (error) {
       // Compensation: delete written S3 keys
-      await compensateS3(storage, spaces.buckets.json, spaces.buckets.content, writtenKeys);
+      await compensateS3(spacesInfo.storage, spacesInfo.bucket, spacesInfo.bucket, writtenKeys);
       
       throw new TxnError(
         `Operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,

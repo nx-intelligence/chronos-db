@@ -64,24 +64,32 @@ export function shouldCallCounters(ctx: RouteContext): boolean {
 async function bumpCountersIfNeeded(
   ctx: RouteContext,
   op: 'CREATE' | 'UPDATE' | 'DELETE',
-  metaIndexed?: Record<string, unknown>
+  metaIndexed?: Record<string, unknown>,
+  router?: BridgeRouter
 ): Promise<void> {
   if (!shouldCallCounters(ctx)) {
     return; // Skip counters for non-runtime tiers
   }
 
-  const config = getGlobalConfig();
-  if (!config?.counters) {
-    return; // Skip counters if not configured
+  if (!router) {
+    return; // Skip counters if no router provided
   }
 
   try {
+    // Get analytics database info from router
+    const dbInfo = router.resolveDatabaseConnection(ctx);
+    if (!dbInfo?.analyticsDbName) {
+      return; // Skip counters if no analytics database configured
+    }
+
     // Initialize counters repo
     const { MongoClient } = await import('mongodb');
-    const countersClient = new MongoClient(config.counters.mongoUri);
+    const countersClient = new MongoClient(dbInfo.mongoUri);
     await countersClient.connect();
-    const countersDb = countersClient.db(config.counters.dbName);
-    const countersRepo = new CounterTotalsRepo(countersDb, config.counterRules?.rules || []);
+    const countersDb = countersClient.db(dbInfo.analyticsDbName);
+    
+    const config = getGlobalConfig();
+    const countersRepo = new CounterTotalsRepo(countersDb, config?.counterRules?.rules || []);
     
     await countersRepo.bumpTotals({
       scope: {
@@ -530,7 +538,7 @@ export async function createItem(
         });
         
         // 11. Bump counters if applicable (runtime tier only)
-        await bumpCountersIfNeeded(ctx, 'CREATE', metaIndexed);
+        await bumpCountersIfNeeded(ctx, 'CREATE', metaIndexed, router);
         
         return result;
       }
@@ -810,7 +818,7 @@ export async function updateItem(
         };
         
         // 13. Bump counters if applicable (runtime tier only)
-        await bumpCountersIfNeeded(ctx, 'UPDATE', metaIndexed);
+        await bumpCountersIfNeeded(ctx, 'UPDATE', metaIndexed, router);
         
         return result;
       }
@@ -1005,7 +1013,7 @@ export async function deleteItem(
         };
         
         // 9. Bump counters if applicable (runtime tier only)
-        await bumpCountersIfNeeded(ctx, 'DELETE', head.metaIndexed);
+        await bumpCountersIfNeeded(ctx, 'DELETE', head.metaIndexed, router);
         
         return result;
       }

@@ -7,7 +7,7 @@ import { CounterTotalsRepo, type CounterTotalsDoc } from './counters/counters.js
 import { MongoClient } from 'mongodb';
 import { enrichRecord, type EnrichContext, type EnrichOptions, type EnrichResult } from './service/enrich.js';
 import { smartInsert, type SmartInsertOptions, type SmartInsertResult } from './db/smartInsert.js';
-import { health, listBackends, shutdown, type HealthReport, type BackendInfo } from './admin/admin.js';
+import { health, shutdown, type HealthReport } from './admin/admin.js';
 import { markItemsAsProcessedByTTL, markItemAsProcessed, type StateTransitionOptions, type StateTransitionResult } from './admin/stateManager.js';
 import { ensureBucketsExist, testS3Connectivity, validateSpacesConfiguration, type BucketManagerOptions, type BucketManagerResult } from './admin/bucketManager.js';
 import { getItem, getLatest, getVersion, getAsOf, query, listByMeta, type ReadContext, type ReadOptions, type QueryOptions, type MetaFilter, type ItemView } from './read/read.js';
@@ -298,12 +298,6 @@ export interface AdminApi {
   health(): Promise<HealthReport>;
 
   /**
-   * List all backends
-   * @returns List of backend information
-   */
-  listBackends(): Promise<BackendInfo[]>;
-
-  /**
    * Shutdown all connections
    * @returns Promise that resolves when shutdown is complete
    */
@@ -479,9 +473,9 @@ export interface PruneResult {
 export function initChronos(config: ChronosConfig): Chronos {
   const startTime = Date.now();
   logger.info('Initializing chronos-db', {
-    version: '1.1.5',
+    version: '2.0.0',
     databasesCount: Object.keys(config.databases).length,
-    hasSpacesConns: !!config.spacesConns && config.spacesConns.length > 0,
+    hasSpacesConnections: !!config.spacesConnections && Object.keys(config.spacesConnections).length > 0,
     localStorageEnabled: config.localStorage?.enabled,
     transactionsEnabled: config.transactions?.enabled
   });
@@ -502,25 +496,38 @@ export function initChronos(config: ChronosConfig): Chronos {
   // Initialize router
   logger.debug('Initializing BridgeRouter');
   const router = new BridgeRouter({
-    mongoConns: config.mongoConns,
+    dbConnections: config.dbConnections,
+    spacesConnections: config.spacesConnections,
     databases: config.databases,
-    ...(config.spacesConns && { spacesConns: config.spacesConns }),
     ...(config.localStorage && { localStorage: config.localStorage }),
     hashAlgo: config.routing.hashAlgo,
     chooseKey: config.routing.chooseKey ?? 'tenantId|dbName|collection:objectId',
   });
   logger.debug('BridgeRouter initialized successfully');
 
-  // Initialize counters (only if config provided)
+  // Initialize counters (only if analytics databases are configured)
   let countersRepo: CounterTotalsRepo | null = null;
   const initCounters = async () => {
-    if (!config.counters) {
-      return null; // Skip counters if not configured
+    // Check if runtime databases have analytics configured
+    if (!config.databases.runtime?.tenantDatabases) {
+      return null; // Skip counters if no runtime databases configured
     }
+    
     if (!countersRepo) {
-      const countersClient = new MongoClient(config.counters.mongoUri);
+      // Use the first runtime tenant database for counters
+      const firstTenantDb = config.databases.runtime.tenantDatabases[0];
+      if (!firstTenantDb) {
+        throw new Error('No runtime tenant databases configured');
+      }
+      
+      const dbConn = config.dbConnections[firstTenantDb.dbConnRef];
+      if (!dbConn) {
+        throw new Error(`Database connection '${firstTenantDb.dbConnRef}' not found`);
+      }
+      
+      const countersClient = new MongoClient(dbConn.mongoUri);
       await countersClient.connect();
-      const countersDb = countersClient.db(config.counters.dbName);
+      const countersDb = countersClient.db(firstTenantDb.analyticsDbName);
       countersRepo = new CounterTotalsRepo(countersDb, config.counterRules?.rules || []);
       await countersRepo.ensureIndexes();
     }
@@ -534,18 +541,18 @@ export function initChronos(config: ChronosConfig): Chronos {
 
   // Get first available MongoDB URI for fallback
   let fallbackMongoUri: string | undefined;
-  if (config.databases.metadata?.[0]) {
-    const mongoConn = config.mongoConns.find(conn => conn.key === config.databases.metadata?.[0]?.mongoConnKey);
-    if (mongoConn) fallbackMongoUri = mongoConn.mongoUri;
-  } else if (config.databases.knowledge?.[0]) {
-    const mongoConn = config.mongoConns.find(conn => conn.key === config.databases.knowledge?.[0]?.mongoConnKey);
-    if (mongoConn) fallbackMongoUri = mongoConn.mongoUri;
-  } else if (config.databases.runtime?.[0]) {
-    const mongoConn = config.mongoConns.find(conn => conn.key === config.databases.runtime?.[0]?.mongoConnKey);
-    if (mongoConn) fallbackMongoUri = mongoConn.mongoUri;
-  } else if (config.databases.logs?.connection) {
-    const mongoConn = config.mongoConns.find(conn => conn.key === config.databases.logs?.connection?.mongoConnKey);
-    if (mongoConn) fallbackMongoUri = mongoConn.mongoUri;
+  if (config.databases.metadata?.genericDatabase) {
+    const dbConn = config.dbConnections[config.databases.metadata.genericDatabase.dbConnRef];
+    if (dbConn) fallbackMongoUri = dbConn.mongoUri;
+  } else if (config.databases.knowledge?.genericDatabase) {
+    const dbConn = config.dbConnections[config.databases.knowledge.genericDatabase.dbConnRef];
+    if (dbConn) fallbackMongoUri = dbConn.mongoUri;
+  } else if (config.databases.runtime?.tenantDatabases?.[0]) {
+    const dbConn = config.dbConnections[config.databases.runtime.tenantDatabases[0].dbConnRef];
+    if (dbConn) fallbackMongoUri = dbConn.mongoUri;
+  } else if (config.databases.logs) {
+    const dbConn = config.dbConnections[config.databases.logs.dbConnRef];
+    if (dbConn) fallbackMongoUri = dbConn.mongoUri;
   }
 
   if (config.fallback?.enabled && fallbackMongoUri) {
@@ -586,8 +593,8 @@ export function initChronos(config: ChronosConfig): Chronos {
 
   return {
     route: (ctx: RouteContext) => {
-      const routeInfo = router.getRouteInfo(ctx);
-      return { index: routeInfo.index, backend: routeInfo.backend.endpoint };
+      const routeInfo = router.route(ctx);
+      return { index: routeInfo.index, backend: routeInfo.endpoint };
     },
 
     with: (ctx: RouteContext) => {
@@ -747,9 +754,6 @@ export function initChronos(config: ChronosConfig): Chronos {
       health: async () => {
         return await health(router, config);
       },
-      listBackends: async () => {
-        return await listBackends(router);
-      },
       shutdown: async () => {
         await shutdown(router, config);
         if (fallbackWorker) {
@@ -879,8 +883,7 @@ export type {
   ChronosConfig,
   RouteContext,
   VersionSpec,
-  SpacesConnConfig,
-  CountersConfig,
+  SpacesConnection,
   RoutingConfig,
   RetentionConfig,
   RollupConfig,
