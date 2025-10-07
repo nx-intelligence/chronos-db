@@ -1,7 +1,7 @@
 {
   "name": "chronos-db",
-  "version": "2.0.1",
-  "description": "Chronos-DB v2.0: Enterprise-grade MongoDB persistence layer with embedded multi-tenancy, tiered architecture, and big data capabilities. Features time-travel versioning, S3/local storage, enrichment API, and lineage tracking. Designed for scalable applications requiring tenant isolation, data versioning, and complex data relationships. Now with simplified configuration, connection reuse, and integrated analytics.",
+  "version": "2.2.0",
+  "description": "Chronos-DB v2.0: Enterprise-grade MongoDB persistence layer with embedded multi-tenancy, tiered architecture, and big data capabilities. Features time-travel versioning, S3/Azure/local storage, enrichment API, and lineage tracking. Designed for scalable applications requiring tenant isolation, data versioning, and complex data relationships. Now with simplified configuration, connection reuse, and integrated analytics.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -32,6 +32,7 @@
     "chronos",
     "mongodb",
     "s3",
+    "azure",
     "storage",
     "versioning",
     "time-travel",
@@ -61,6 +62,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.450.0",
     "@aws-sdk/s3-request-presigner": "^3.450.0",
+    "@azure/storage-blob": "^12.28.0",
     "logs-gateway": "^1.0.0",
     "mongodb": "^6.3.0",
     "zod": "^3.22.4"

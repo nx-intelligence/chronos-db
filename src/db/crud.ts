@@ -89,7 +89,7 @@ async function bumpCountersIfNeeded(
     const countersDb = countersClient.db(dbInfo.analyticsDbName);
     
     const config = getGlobalConfig();
-    const countersRepo = new CounterTotalsRepo(countersDb, config?.counterRules?.rules || []);
+    const countersRepo = new CounterTotalsRepo(countersDb, config?.analytics?.counterRules || []);
     
     await countersRepo.bumpTotals({
       scope: {

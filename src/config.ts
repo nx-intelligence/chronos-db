@@ -313,8 +313,8 @@ export interface ChronosConfig {
   rollup?: RollupConfig | undefined;
   /** Collection definitions with indexing and externalization rules */
   collectionMaps: Record<string, CollectionMap>;
-  /** Optional counter rules for conditional totals */
-  counterRules?: CountersRulesConfig | undefined;
+  /** Analytics configuration (counters, time-based, cross-tenant) */
+  analytics?: AnalyticsConfig | undefined;
   /** Dev shadow configuration for full snapshots in Mongo */
   devShadow?: DevShadowConfig | undefined;
   /** Enable hard delete functionality */
@@ -394,16 +394,16 @@ export async function validateTransactionConfig(config: Partial<ChronosConfig>):
       logger.error('Transaction validation failed: No MongoDB URI available');
       throw new Error('No MongoDB URI available for transaction validation');
     }
-
+    
     logger.debug('Checking MongoDB replica set availability', { mongoUri: mongoUri.replace(/\/\/.*@/, '//***@') });
     const hasReplicaSet = await isReplicaSetAvailable(mongoUri);
-
-    logger.debug('MongoDB replica set check completed', {
-      hasReplicaSet,
+    
+    logger.debug('MongoDB replica set check completed', { 
+      hasReplicaSet, 
       autoDetect: config.transactions.autoDetect,
       mongoUri: mongoUri.replace(/\/\/.*@/, '//***@')
     });
-
+    
     if (!hasReplicaSet && !config.transactions.autoDetect) {
       logger.warn('MongoDB does not support transactions, but transactions are enabled without autoDetect');
       throw new Error('MongoDB does not support transactions. Enable autoDetect or disable transactions.');
@@ -521,4 +521,72 @@ export interface CounterRule {
   scope?: 'meta' | 'payload';
   /** Condition */
   when: Record<string, any>;
+  /** Properties to count unique values for */
+  countUnique?: string[];
+}
+
+/**
+ * Time-based analytics rule for worker-driven analytics
+ */
+export interface TimeBasedRule {
+  /** Rule name */
+  name: string;
+  /** Collection to query */
+  collection: string;
+  /** Query filter */
+  query: Record<string, any>;
+  /** Aggregation operation */
+  operation: 'count' | 'sum' | 'average' | 'max' | 'min' | 'median';
+  /** Field to aggregate (for sum, average, max, min, median) */
+  field?: string;
+  /** Save mode */
+  saveMode: 'global' | 'timeframe';
+  /** Timeframe granularity (if saveMode is 'timeframe') */
+  timeframe?: 'hourly' | 'daily' | 'monthly';
+  /** Arguments (record keys for foreign key filtering) */
+  arguments?: string[];
+  /** Relative time arguments */
+  relativeTime?: {
+    newerThan?: string; // ISO duration (e.g., 'PT1H', 'P1D')
+    olderThan?: string; // ISO duration (e.g., 'PT1H', 'P1D')
+  };
+}
+
+/**
+ * Cross-tenant analytics rule (master-slave aggregation)
+ */
+export interface CrossTenantRule {
+  /** Rule name */
+  name: string;
+  /** Collection to query across tenants */
+  collection: string;
+  /** Query filter */
+  query: Record<string, any>;
+  /** Aggregation mode */
+  mode: 'boolean' | 'sum' | 'max' | 'min' | 'median';
+  /** Field to aggregate (for sum, max, min, median) */
+  field?: string;
+  /** Master tenant ID (where results are stored) */
+  masterTenantId: string;
+  /** Slave tenant IDs (data sources) */
+  slaveTenantIds: string[];
+  /** Relative time arguments */
+  relativeTime?: {
+    newerThan?: string; // ISO duration (e.g., 'PT1H', 'P1D')
+    olderThan?: string; // ISO duration (e.g., 'PT1H', 'P1D')
+  };
+}
+
+/**
+ * Analytics configuration
+ */
+export interface AnalyticsConfig {
+  /** Standard counter rules */
+  counterRules?: CounterRule[];
+  /** Time-based analytics rules (worker-driven) */
+  timeBasedRules?: TimeBasedRule[];
+  /** Cross-tenant analytics rules */
+  crossTenantRules?: CrossTenantRule[];
+  /** List of all tenant IDs for cross-tenant operations */
+  tenants?: string[];
 }

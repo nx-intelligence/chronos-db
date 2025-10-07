@@ -1,4 +1,4 @@
-# Chronos-DB v2.0 🚀
+# Chronos-DB v2.2 🚀
 
 > **Enterprise-Grade MongoDB Persistence Layer with Embedded Multi-Tenancy & Big Data Architecture**
 
@@ -11,7 +11,7 @@
 
 ## 🎯 **Built for Enterprise & Big Data**
 
-Chronos-DB v2.0 is designed for **large-scale enterprise applications** requiring **tenant isolation**, **data versioning**, and **complex data relationships**. Built with **embedded multi-tenancy by design** and **tiered architecture** to handle big data workloads efficiently while maintaining **enterprise-grade security and compliance**.
+Chronos-DB v2.2 is designed for **large-scale enterprise applications** requiring **tenant isolation**, **data versioning**, and **complex data relationships**. Built with **embedded multi-tenancy by design** and **tiered architecture** to handle big data workloads efficiently while maintaining **enterprise-grade security and compliance**.
 
 ### 🏢 **Enterprise Features**
 
@@ -35,10 +35,12 @@ Chronos-DB v2.0 provides a production-ready persistence layer designed for **ent
 - **🔄 Automatic versioning** with explicit restore capabilities and time-travel queries
 - **⚡ Multi-backend routing** with connection pooling for horizontal scaling
 - **🔒 Transaction locking** for concurrent write prevention across multiple servers
-- **📈 Big Data Optimization**: Efficient handling of large datasets with S3 integration
+- **📈 Big Data Optimization**: Efficient handling of large datasets with S3/Azure integration
 - **🎯 Tenant Isolation**: Row-level security with configurable tenant boundaries
 - **📊 Integrated Analytics**: Built-in counters and metrics for business intelligence
-- **🔧 Enrichment API** for incremental updates
+- **🔗 Entity Relationships**: Automatic entity management with `insertWithEntities` and `getWithEntities`
+- **🎯 Tiered Fetching**: `getKnowledge` and `getMetadata` with automatic fallback/merge across tiers
+- **🔧 Enrichment API** for incremental updates with deep merge
 - **🔄 Fallback queues** for guaranteed durability
 - **⚡ Write optimization** for high-throughput scenarios
 
@@ -187,6 +189,13 @@ spacesConnections: {
     region: 'us-east-1',
     accessKey: process.env.TENANT_A_ACCESS_KEY,
     secretKey: process.env.TENANT_A_SECRET_KEY
+  },
+  // Azure Blob Storage (NEW in v2.0.1)
+  'azure-primary': {
+    endpoint: 'https://myaccount.blob.core.windows.net',
+    region: 'us-east-1',  // Not used for Azure but required
+    accessKey: process.env.AZURE_ACCOUNT_NAME,
+    secretKey: process.env.AZURE_ACCOUNT_KEY
   }
 }
 ```
@@ -241,10 +250,10 @@ versioning: {
 **SOX Compliance**
 ```typescript
 // Enable comprehensive audit trails
-collectionMaps: {
+  collectionMaps: {
   financial_records: {
     indexedProps: ['accountId', 'transactionId', 'amount', 'date'],
-    validation: {
+      validation: {
       requiredIndexed: ['accountId', 'transactionId', 'amount']
     }
   }
@@ -894,7 +903,207 @@ const metrics = await chronos.counters.getTotals({
 // }
 ```
 
-### **5. Restore Operations**
+### **5. Entity Relationship Management**
+
+**New in v2.0.1!** Automatic management of related entities with referential integrity:
+
+#### **insertWithEntities** - Auto-save Related Entities
+
+Automatically extract and save related entities to their own collections:
+
+```typescript
+// Define entity mappings
+const entityMappings = [
+  {
+    property: 'customer',           // Property in main record
+    collection: 'customers',        // Target collection
+    keyProperty: 'customerId',      // Key field in entity
+    databaseType: 'metadata',       // Optional: database tier
+    tier: 'tenant'                  // Optional: tier level
+  },
+  {
+    property: 'product',
+    collection: 'products',
+    keyProperty: 'productId',
+    databaseType: 'knowledge',
+    tier: 'domain'
+  }
+];
+
+// Insert order with automatic customer/product management
+const result = await ops.insertWithEntities(
+  {
+    orderId: 'ORD-123',
+    customer: {
+      customerId: 'CUST-456',
+      name: 'John Doe',
+      email: 'john@example.com'
+    },
+    product: {
+      productId: 'PROD-789',
+      name: 'Widget',
+      price: 99.99
+    },
+    quantity: 2
+  },
+  entityMappings,
+  'order-system',
+  'new order created'
+);
+
+// Returns:
+// {
+//   mainRecordId: 'order-123-id',
+//   entityResults: Map {
+//     'customer' => { id: 'cust-id', operation: 'created' },
+//     'product' => { id: 'prod-id', operation: 'unchanged' }
+//   }
+// }
+
+// What happened:
+// 1. Checked if customer CUST-456 exists → Created new customer record
+// 2. Checked if product PROD-789 exists → Already existed, no changes
+// 3. Created the order record with embedded customer/product objects
+```
+
+#### **getWithEntities** - Auto-fetch Related Entities
+
+Fetch a record and automatically retrieve all related entities:
+
+```typescript
+// Fetch order with all related entities
+const result = await ops.getWithEntities(
+  'order-123-id',
+  entityMappings,
+  { presign: true }  // Optional read options
+);
+
+// Returns:
+// {
+//   mainRecord: { 
+//     orderId: 'ORD-123',
+//     customer: { customerId: 'CUST-456', ... },
+//     product: { productId: 'PROD-789', ... },
+//     quantity: 2
+//   },
+//   entityRecords: Map {
+//     'customer' => { customerId: 'CUST-456', name: 'John Doe', ... },
+//     'product' => { productId: 'PROD-789', name: 'Widget', price: 99.99, ... }
+//   }
+// }
+
+// Benefits:
+// - Single call to fetch related data
+// - Automatic relationship resolution
+// - Maintains referential integrity
+// - Works across database tiers
+```
+
+### **6. Tiered Data Fetching**
+
+**New in v2.0.1!** Fetch data across tiers with automatic fallback or merging:
+
+#### **getKnowledge** - Tiered Knowledge Fetching
+
+Fetch from knowledge database with tier priority (tenant → domain → generic):
+
+```typescript
+// Fetch with fallback (returns first found)
+const config = await chronos.getKnowledge(
+  'app-config',
+  { key: 'feature-flags' },
+  {
+    tenantId: 'tenant-a',
+    domain: 'production',
+    merge: false  // Return first found
+  }
+);
+// Returns tenant config if exists, otherwise domain, otherwise generic
+
+// Fetch with merge (combines all tiers)
+const mergedConfig = await chronos.getKnowledge(
+  'app-config',
+  { key: 'feature-flags' },
+  {
+    tenantId: 'tenant-a',
+    domain: 'production',
+    merge: true,  // Merge all tiers
+    mergeOptions: { dedupeArrays: true }
+  }
+);
+
+// Returns:
+// {
+//   data: { 
+//     // Generic tier settings
+//     maxUploadSize: 10485760,
+//     // Domain tier settings (production)
+//     enableNewFeature: true,
+//     // Tenant tier settings (tenant-a overrides)
+//     maxUploadSize: 52428800,
+//     customField: 'tenant-specific'
+//   },
+//   tiersFound: ['generic', 'domain', 'tenant'],
+//   tierRecords: {
+//     generic: { maxUploadSize: 10485760, ... },
+//     domain: { enableNewFeature: true, ... },
+//     tenant: { maxUploadSize: 52428800, customField: ... }
+//   }
+// }
+```
+
+#### **getMetadata** - Tiered Metadata Fetching
+
+Same functionality for metadata database:
+
+```typescript
+// Fetch schema with tier fallback
+const schema = await chronos.getMetadata(
+  'schemas',
+  { entityType: 'user' },
+  {
+    tenantId: 'tenant-a',
+    domain: 'saas',
+    merge: true
+  }
+);
+
+// Merge priority: generic → domain → tenant
+// Tenant-specific fields override domain and generic
+```
+
+#### **How Tiered Merging Works**
+
+```typescript
+// Generic tier (base configuration)
+{
+  theme: 'light',
+  features: ['basic', 'standard'],
+  settings: { timeout: 30 }
+}
+
+// Domain tier (environment-specific)
+{
+  features: ['advanced'],
+  settings: { maxRetries: 3 }
+}
+
+// Tenant tier (customer-specific)
+{
+  theme: 'dark',
+  features: ['premium'],
+  settings: { timeout: 60 }
+}
+
+// Merged result (with merge: true):
+{
+  theme: 'dark',                                    // From tenant (overrides)
+  features: ['basic', 'standard', 'advanced', 'premium'],  // Union of all
+  settings: { timeout: 60, maxRetries: 3 }         // Deep merge
+}
+```
+
+### **7. Restore Operations**
 
 Explicit, append-only restore with audit trails:
 
@@ -1035,6 +1244,816 @@ tenantDatabases: [
 
 ---
 
+## 📋 **System Fields Structure**
+
+### **Document Structure Overview**
+
+Chronos-DB organizes all system fields under the `_system` property to keep your documents clean and normal-looking. This design ensures that your application data remains separate from Chronos-DB's internal management fields.
+
+### **Complete Document Structure**
+
+```json
+{
+  "_id": "507f1f77bcf86cd799439011",  // MongoDB's native _id (stays at root)
+  "email": "user@example.com",        // Your application data
+  "name": "John Doe",                 // Your application data
+  "status": "active",                 // Your application data
+  "_system": {                        // All Chronos-DB system fields
+    "ov": 3,                          // Object version (incremented on each update)
+    "cv": 150,                        // Collection version (incremented on each operation)
+    "insertedAt": "2024-01-01T00:00:00Z",  // Creation timestamp
+    "updatedAt": "2024-01-15T10:30:00Z",   // Last update timestamp
+    "deletedAt": null,                // Deletion timestamp (null if not deleted)
+    "deleted": false,                 // Deletion status
+    "functionIds": ["enricher@v1"],   // Enrichment function IDs that modified this record
+    "parentId": "parent-record-id",   // Parent record for lineage tracking
+    "parentCollection": "parent-collection", // Parent collection name
+    "originId": "root-record-id",     // Original root record ID
+    "originCollection": "root-collection"   // Original root collection name
+  }
+}
+```
+
+### **System Fields Explained**
+
+#### **Version Management**
+- **`ov` (Object Version)**: Incremented each time this specific record is updated
+- **`cv` (Collection Version)**: Incremented each time any record in the collection is modified
+- **Purpose**: Enables optimistic locking and time-travel queries
+
+#### **Timestamps**
+- **`insertedAt`**: ISO 8601 timestamp when the record was first created
+- **`updatedAt`**: ISO 8601 timestamp when the record was last modified
+- **`deletedAt`**: ISO 8601 timestamp when the record was logically deleted (null if not deleted)
+- **Purpose**: Audit trails and temporal queries
+
+#### **Deletion Status**
+- **`deleted`**: Boolean indicating if the record is logically deleted
+- **Purpose**: Enables logical delete functionality while maintaining audit trails
+
+#### **Enrichment Tracking**
+- **`functionIds`**: Array of enrichment function IDs that have modified this record
+- **Purpose**: Tracks data lineage and enrichment provenance
+
+#### **Lineage Tracking**
+- **`parentId`**: ID of the parent record (for hierarchical data)
+- **`parentCollection`**: Collection name of the parent record
+- **`originId`**: ID of the original root record (preserved throughout lineage)
+- **`originCollection`**: Collection name of the original root record
+- **Purpose**: Complete data lineage tracking for compliance and debugging
+
+### **What Chronos-DB Manages Automatically**
+
+Chronos-DB automatically manages all `_system` fields. **Your application should NOT modify these fields directly.**
+
+#### **Automatic Management**
+- ✅ **Version Increments**: `ov` and `cv` are automatically incremented
+- ✅ **Timestamp Updates**: `insertedAt`, `updatedAt`, `deletedAt` are automatically set
+- ✅ **Deletion Status**: `deleted` flag is automatically managed
+- ✅ **Enrichment Tracking**: `functionIds` are automatically updated during enrichment
+- ✅ **Lineage Tracking**: Parent and origin fields are automatically set when provided
+
+#### **What Your App Should Do**
+- ✅ **Read `_system` fields**: Use them for optimistic locking, audit trails, etc.
+- ✅ **Provide lineage context**: Pass `parentRecord` or `origin` when creating records
+- ✅ **Use version fields**: Pass `expectedOv` for updates to prevent conflicts
+
+#### **What Your App Should NOT Do**
+- ❌ **Modify `_system` fields**: Never directly set or change these fields
+- ❌ **Depend on specific values**: Don't assume specific version numbers or timestamps
+- ❌ **Bypass system fields**: Always use Chronos-DB APIs for data operations
+
+### **Usage Examples**
+
+#### **Creating Records with Lineage**
+```typescript
+// Create a child record with parent lineage
+const childRecord = await ops.create({
+  name: 'Child Record',
+  data: 'some data'
+}, 'system', 'child creation', {
+  parentRecord: {
+    id: 'parent-record-id',
+    collection: 'parent_items',
+  }
+});
+
+// The _system field will automatically include:
+// {
+//   parentId: 'parent-record-id',
+//   parentCollection: 'parent_items',
+//   originId: 'parent-record-id',        // Derived from parent
+//   originCollection: 'parent_items'    // Derived from parent
+// }
+```
+
+#### **Creating Records with Explicit Origin**
+```typescript
+// Create a record with explicit origin (e.g., from external system)
+const importedRecord = await ops.create({
+  customerId: 'ext-123',
+  name: 'Imported Customer'
+}, 'system', 'import', {
+  origin: {
+    id: 'stripe_cus_123',
+    collection: 'customers',
+    system: 'stripe'  // Optional external system name
+  }
+});
+
+// The _system field will automatically include:
+// {
+//   originId: 'stripe_cus_123',
+//   originCollection: 'stripe:customers'  // Includes system prefix
+// }
+```
+
+#### **Using System Fields for Optimistic Locking**
+```typescript
+// Get current record
+const current = await ops.getLatest('record-id');
+
+// Update with optimistic locking
+const updated = await ops.update('record-id', {
+  name: 'Updated Name'
+}, current._system.ov, 'user', 'name-update');
+
+// Chronos-DB automatically:
+// - Increments ov from 3 to 4
+// - Updates updatedAt timestamp
+// - Prevents conflicts if another process updated the record
+```
+
+#### **Time-Travel Queries**
+```typescript
+// Get record as it was at a specific time
+const historical = await ops.getAsOf('record-id', '2024-01-01T00:00:00Z');
+
+// Get specific version
+const v2 = await ops.getVersion('record-id', 2);
+
+// Both return the same structure with _system fields showing:
+// - ov: 2 (version at that time)
+// - updatedAt: timestamp when that version was created
+// - All other _system fields as they were at that time
+```
+
+### **Benefits of This Design**
+
+#### **Clean Application Data**
+- Your application data remains clean and normal-looking
+- No system fields mixed with business data
+- Easy to understand and maintain
+
+#### **Complete Audit Trail**
+- Every change is tracked with timestamps
+- Full lineage from origin to current state
+- Enrichment provenance is preserved
+
+#### **Optimistic Locking**
+- Built-in conflict prevention
+- Version-based concurrency control
+- No need for external locking mechanisms
+
+#### **Time-Travel Capabilities**
+- Access any version of any record
+- Point-in-time queries
+- Complete historical data preservation
+
+#### **Compliance Ready**
+- GDPR compliance with logical delete
+- SOX compliance with immutable audit trails
+- HIPAA compliance with complete data lineage
+
+### **Migration from Other Systems**
+
+If you're migrating from a system that stores version/timestamp fields at the root level:
+
+```typescript
+// OLD WAY (don't do this):
+{
+  "_id": "123",
+  "name": "John",
+  "version": 5,           // ❌ Don't store at root
+  "createdAt": "...",     // ❌ Don't store at root
+  "updatedAt": "..."      // ❌ Don't store at root
+}
+
+// NEW WAY (Chronos-DB):
+{
+  "_id": "123",
+  "name": "John",         // ✅ Clean application data
+  "_system": {            // ✅ All system fields organized
+    "ov": 5,
+    "insertedAt": "...",
+    "updatedAt": "..."
+  }
+}
+```
+
+### **Enhanced Analytics with Unique Counting**
+
+Chronos-DB v2.0.1 includes sophisticated analytics capabilities with unique counting support.
+
+#### **Counter Rules with Unique Counting**
+```typescript
+counterRules: {
+  rules: [
+    {
+      name: 'user_logins',
+      on: ['CREATE'],
+      scope: 'meta',
+      when: { action: 'login' },
+      countUnique: ['sessionId']  // Count unique sessionId values
+    },
+    {
+      name: 'product_views',
+      on: ['CREATE'],
+      scope: 'meta',
+      when: { action: 'view' },
+      countUnique: ['productId', 'category', 'brand']  // Multiple unique counts
+    },
+    {
+      name: 'premium_purchases',
+      on: ['CREATE'],
+      scope: 'meta',
+      when: { 
+        userTier: 'premium',
+        action: 'purchase',
+        amount: { $gte: 100 }
+      },
+      countUnique: ['productId', 'category']
+    }
+  ]
+}
+```
+
+#### **Analytics Results**
+```typescript
+// Get analytics for a tenant
+const metrics = await chronos.counters.getTotals({
+  dbName: 'chronos_runtime_tenant_a',
+  collection: 'events',
+});
+
+console.log('Analytics:', metrics);
+// Output:
+// {
+//   _id: "tenant:tenant-a|db:chronos_runtime_tenant_a|coll:events",
+//   created: 1000,              // Total occurrences
+//   updated: 500,
+//   deleted: 50,
+//   rules: {
+//     user_logins: {
+//       created: 150,           // Total logins
+//       unique: {
+//         sessionId: 45         // Unique sessions
+//       }
+//     },
+//     product_views: {
+//       created: 800,           // Total views
+//       unique: {
+//         productId: 150,       // Unique products viewed
+//         category: 25,         // Unique categories viewed
+//         brand: 12             // Unique brands viewed
+//       }
+//     },
+//     premium_purchases: {
+//       created: 200,           // Total premium purchases
+//       unique: {
+//         productId: 75,        // Unique products purchased
+//         category: 15          // Unique categories purchased
+//       }
+//     }
+//   },
+//   lastAt: "2024-01-15T10:30:00Z"
+// }
+```
+
+#### **Why Unique Counting is Important**
+
+**Business Intelligence**: Understand user behavior patterns
+- How many unique users visited today?
+- How many unique products were viewed this month?
+- What's the conversion rate from views to purchases?
+
+**Performance Optimization**: Identify bottlenecks
+- Which products are most popular?
+- Which categories drive the most engagement?
+- What's the user retention rate?
+
+**Compliance Reporting**: Meet regulatory requirements
+- Unique user counts for GDPR compliance
+- Unique transaction counts for financial reporting
+- Unique data access counts for audit trails
+
+#### **Advanced Analytics Use Cases**
+
+**E-commerce Analytics**
+```typescript
+// Track unique customers per day
+{
+  name: 'daily_unique_customers',
+  on: ['CREATE'],
+  scope: 'meta',
+  when: { event: 'purchase' },
+  countUnique: ['customerId']
+}
+
+// Track unique products per category
+{
+  name: 'category_product_diversity',
+  on: ['CREATE'],
+  scope: 'meta',
+  when: { action: 'view' },
+  countUnique: ['productId', 'category']
+}
+```
+
+**User Engagement Analytics**
+```typescript
+// Track unique sessions per user
+{
+  name: 'user_session_activity',
+  on: ['CREATE'],
+  scope: 'meta',
+  when: { action: 'login' },
+  countUnique: ['sessionId', 'userId']
+}
+
+// Track unique features used per user
+{
+  name: 'feature_adoption',
+  on: ['CREATE'],
+  scope: 'meta',
+  when: { event: 'feature_used' },
+  countUnique: ['featureId', 'userId']
+}
+```
+
+**Financial Analytics**
+```typescript
+// Track unique accounts per transaction type
+{
+  name: 'transaction_diversity',
+  on: ['CREATE'],
+  scope: 'meta',
+  when: { 
+    event: 'transaction',
+    amount: { $gte: 1000 }
+  },
+  countUnique: ['accountId', 'transactionType']
+}
+```
+
+#### **Analytics Database Structure**
+
+Each tenant gets its own analytics database with the following collections:
+
+**`cnt_total` Collection**
+```json
+{
+  "_id": "tenant:tenant-a|db:chronos_runtime_tenant_a|coll:events",
+  "tenant": "tenant-a",
+  "dbName": "chronos_runtime_tenant_a",
+  "collection": "events",
+  "created": 1000,
+  "updated": 500,
+  "deleted": 50,
+  "rules": {
+    "user_logins": {
+      "created": 150,
+      "unique": {
+        "sessionId": ["sess1", "sess2", "sess3", ...]  // Stored as arrays
+      }
+    }
+  },
+  "lastAt": "2024-01-15T10:30:00Z"
+}
+```
+
+**Key Features**:
+- **Automatic Deduplication**: MongoDB's `$addToSet` ensures unique values
+- **Efficient Storage**: Arrays are converted to counts when retrieved
+- **Real-time Updates**: Counters are updated with every operation
+- **Tenant Isolation**: Each tenant has separate analytics
+
+#### **Analytics Best Practices**
+
+**1. Choose Meaningful Properties**
+```typescript
+// Good: Track business-relevant unique values
+countUnique: ['userId', 'productId', 'sessionId']
+
+// Avoid: Tracking too many properties
+countUnique: ['userId', 'productId', 'sessionId', 'ipAddress', 'userAgent', 'timestamp']
+```
+
+**2. Use Appropriate Conditions**
+```typescript
+// Good: Specific conditions for meaningful analytics
+when: { 
+  userTier: 'premium',
+  action: 'purchase',
+  amount: { $gte: 100 }
+}
+
+// Avoid: Too broad conditions
+when: { action: 'view' }  // Might be too noisy
+```
+
+**3. Monitor Performance**
+```typescript
+// Use indexes on frequently queried fields
+collectionMaps: {
+  events: {
+    indexedProps: ['userId', 'action', 'timestamp', 'userTier']
+  }
+}
+```
+
+**4. Regular Cleanup**
+```typescript
+// Set appropriate retention policies
+retention: {
+  counters: {
+    days: 30,    // Keep daily counts for 30 days
+    weeks: 12,   // Keep weekly counts for 12 weeks
+    months: 6    // Keep monthly counts for 6 months
+}
+```
+
+---
+
+## 🔧 **Worker Integration**
+
+Chronos-DB provides advanced analytics capabilities that are designed to work with external workers. **Important**: The worker itself is NOT included in Chronos-DB - you need to implement your own worker system.
+
+### **Time-Based Analytics Rules**
+
+Time-based analytics rules are designed to be executed by external workers on a schedule (hourly, daily, monthly).
+
+#### **Configuration**
+
+```typescript
+analytics: {
+  // Standard counter rules (real-time)
+  counterRules: [
+    {
+      name: 'user_logins',
+      on: ['CREATE'],
+      scope: 'meta',
+      when: { action: 'login' },
+      countUnique: ['sessionId']
+    }
+  ],
+  
+  // Time-based analytics rules (worker-driven)
+  timeBasedRules: [
+    {
+      name: 'daily_revenue',
+      collection: 'transactions',
+      query: { status: 'completed' },
+      operation: 'sum',
+      field: 'amount',
+      saveMode: 'timeframe',
+      timeframe: 'daily'
+    },
+    {
+      name: 'hourly_active_users',
+      collection: 'events',
+      query: { action: 'page_view' },
+      operation: 'count',
+      saveMode: 'timeframe',
+      timeframe: 'hourly',
+      relativeTime: {
+        newerThan: 'PT1H'  // Last hour
+      }
+    },
+    {
+      name: 'monthly_unique_customers',
+      collection: 'orders',
+      query: { status: 'completed' },
+      operation: 'count',
+      saveMode: 'timeframe',
+      timeframe: 'monthly',
+      arguments: ['customerId']  // Foreign key filtering
+    }
+  ],
+  
+  // Cross-tenant analytics rules
+  crossTenantRules: [
+    {
+      name: 'global_active_tenants',
+      collection: 'events',
+      query: { action: 'user_activity' },
+      mode: 'boolean',
+      masterTenantId: 'master-tenant',
+      slaveTenantIds: ['tenant-a', 'tenant-b', 'tenant-c'],
+      relativeTime: {
+        newerThan: 'P1D'  // Last 24 hours
+      }
+    }
+  ],
+  
+  // List of all tenants for cross-tenant operations
+  tenants: ['tenant-a', 'tenant-b', 'tenant-c', 'master-tenant']
+}
+```
+
+#### **Worker Implementation Example**
+
+```typescript
+import { AdvancedAnalytics } from 'chronos-db';
+import { MongoClient } from 'mongodb';
+
+class AnalyticsWorker {
+  private analytics: AdvancedAnalytics;
+  
+  constructor(mongoUri: string, analyticsDbName: string, config: any) {
+    const mongoClient = new MongoClient(mongoUri);
+    this.analytics = new AdvancedAnalytics(mongoClient, analyticsDbName, config);
+  }
+  
+  // Execute time-based rules
+  async executeTimeBasedRules() {
+    const rules = this.config.analytics.timeBasedRules || [];
+    
+    for (const rule of rules) {
+      try {
+        const result = await this.analytics.executeTimeBasedRule(rule);
+        console.log(`Executed rule ${rule.name}:`, result.value);
+      } catch (error) {
+        console.error(`Failed to execute rule ${rule.name}:`, error);
+      }
+    }
+  }
+  
+  // Execute cross-tenant rules
+  async executeCrossTenantRules() {
+    const rules = this.config.analytics.crossTenantRules || [];
+    
+    for (const rule of rules) {
+      try {
+        const result = await this.analytics.executeCrossTenantRule(rule);
+        console.log(`Executed cross-tenant rule ${rule.name}:`, result.value);
+      } catch (error) {
+        console.error(`Failed to execute cross-tenant rule ${rule.name}:`, error);
+      }
+    }
+  }
+  
+  // Cleanup TTL data
+  async cleanupTTLData() {
+    // Clean up old analytics data
+    const cutoffDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 30 days ago
+    
+    // Clean up time-based results older than 30 days
+    await this.analytics.analyticsDb.collection('timeBasedResults')
+      .deleteMany({ timestamp: { $lt: cutoffDate } });
+    
+    // Clean up cross-tenant results older than 30 days
+    await this.analytics.analyticsDb.collection('crossTenantResults')
+      .deleteMany({ timestamp: { $lt: cutoffDate } });
+    
+    console.log('TTL cleanup completed');
+  }
+}
+
+// Worker scheduling (example with node-cron)
+import cron from 'node-cron';
+
+const worker = new AnalyticsWorker(
+  'mongodb://localhost:27017',
+  'analytics_db',
+  config
+);
+
+// Run time-based analytics every hour
+cron.schedule('0 * * * *', async () => {
+  console.log('Running hourly analytics...');
+  await worker.executeTimeBasedRules();
+});
+
+// Run cross-tenant analytics daily at midnight
+cron.schedule('0 0 * * *', async () => {
+  console.log('Running daily cross-tenant analytics...');
+  await worker.executeCrossTenantRules();
+});
+
+// Cleanup TTL data weekly
+cron.schedule('0 0 * * 0', async () => {
+  console.log('Running weekly TTL cleanup...');
+  await worker.cleanupTTLData();
+});
+```
+
+### **Analytics Results Structure**
+
+#### **Time-Based Results**
+
+```json
+{
+  "_id": "daily_revenue_1704067200000_abc123",
+  "ruleName": "daily_revenue",
+  "collection": "transactions",
+  "operation": "sum",
+  "field": "amount",
+  "value": 15420.50,
+  "timeframe": "daily",
+  "timestamp": "2024-01-01T00:00:00Z",
+  "arguments": null
+}
+```
+
+#### **Cross-Tenant Results**
+
+```json
+{
+  "_id": "global_active_tenants_1704067200000_def456",
+  "ruleName": "global_active_tenants",
+  "collection": "events",
+  "mode": "boolean",
+  "value": 3,
+  "timestamp": "2024-01-01T00:00:00Z",
+  "masterTenantId": "master-tenant",
+  "slaveResults": [
+    { "tenantId": "tenant-a", "value": 1 },
+    { "tenantId": "tenant-b", "value": 1 },
+    { "tenantId": "tenant-c", "value": 1 }
+  ]
+}
+```
+
+### **Worker Integration Points**
+
+#### **1. Analytics Execution**
+
+```typescript
+// Get analytics results
+const timeBasedResults = await analytics.getTimeBasedResults({
+  ruleName: 'daily_revenue',
+  timeframe: 'daily',
+  limit: 30
+});
+
+const crossTenantResults = await analytics.getCrossTenantResults({
+  ruleName: 'global_active_tenants',
+  masterTenantId: 'master-tenant',
+  limit: 7
+});
+```
+
+#### **2. TTL Cleanup**
+
+Chronos-DB requires external workers to handle TTL cleanup for:
+
+- **Analytics Data**: Old time-based and cross-tenant results
+- **Version Data**: Old document versions (if retention policies are set)
+- **Counter Data**: Old counter totals (if retention policies are set)
+- **Fallback Queue**: Dead letter queue cleanup
+
+#### **3. Error Handling**
+
+```typescript
+// Robust worker with error handling
+class RobustAnalyticsWorker {
+  async executeWithRetry(operation: () => Promise<any>, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        console.error(`Attempt ${attempt} failed:`, error);
+        if (attempt === maxRetries) {
+          throw error;
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
+    }
+  }
+  
+  async executeTimeBasedRules() {
+    const rules = this.config.analytics.timeBasedRules || [];
+    
+    for (const rule of rules) {
+      await this.executeWithRetry(async () => {
+        const result = await this.analytics.executeTimeBasedRule(rule);
+        console.log(`Executed rule ${rule.name}:`, result.value);
+      });
+    }
+  }
+}
+```
+
+### **Production Considerations**
+
+#### **1. Worker Scaling**
+
+```typescript
+// Multiple workers for high-volume analytics
+const workers = [
+  new AnalyticsWorker(mongoUri1, 'analytics_db_1', config),
+  new AnalyticsWorker(mongoUri2, 'analytics_db_2', config),
+  new AnalyticsWorker(mongoUri3, 'analytics_db_3', config)
+];
+
+// Distribute rules across workers
+const rulesPerWorker = Math.ceil(timeBasedRules.length / workers.length);
+workers.forEach((worker, index) => {
+  const startIndex = index * rulesPerWorker;
+  const endIndex = Math.min(startIndex + rulesPerWorker, timeBasedRules.length);
+  const workerRules = timeBasedRules.slice(startIndex, endIndex);
+  
+  // Execute worker-specific rules
+  worker.executeRules(workerRules);
+});
+```
+
+#### **2. Monitoring and Alerting**
+
+```typescript
+// Worker health monitoring
+class MonitoredAnalyticsWorker {
+  async executeTimeBasedRules() {
+    const startTime = Date.now();
+    let successCount = 0;
+    let errorCount = 0;
+    
+    try {
+      const rules = this.config.analytics.timeBasedRules || [];
+      
+      for (const rule of rules) {
+        try {
+          await this.analytics.executeTimeBasedRule(rule);
+          successCount++;
+        } catch (error) {
+          errorCount++;
+          console.error(`Rule ${rule.name} failed:`, error);
+          
+          // Send alert for critical rules
+          if (rule.critical) {
+            await this.sendAlert(`Critical analytics rule failed: ${rule.name}`);
+          }
+        }
+      }
+      
+      const duration = Date.now() - startTime;
+      console.log(`Analytics execution completed: ${successCount} success, ${errorCount} errors, ${duration}ms`);
+      
+      // Send metrics to monitoring system
+      await this.sendMetrics({
+        successCount,
+        errorCount,
+        duration,
+        timestamp: new Date()
+      });
+      
+    } catch (error) {
+      console.error('Analytics worker failed:', error);
+      await this.sendAlert('Analytics worker failed completely');
+    }
+  }
+}
+```
+
+#### **3. Data Consistency**
+
+```typescript
+// Ensure data consistency across workers
+class ConsistentAnalyticsWorker {
+  async executeCrossTenantRules() {
+    // Use MongoDB transactions for consistency
+    const session = this.analytics.mongoClient.startSession();
+    
+    try {
+      await session.withTransaction(async () => {
+        const rules = this.config.analytics.crossTenantRules || [];
+        
+        for (const rule of rules) {
+          const result = await this.analytics.executeCrossTenantRule(rule);
+          
+          // Verify result consistency
+          await this.verifyCrossTenantResult(result);
+        }
+      });
+    } finally {
+      await session.endSession();
+    }
+  }
+  
+  async verifyCrossTenantResult(result: CrossTenantResult) {
+    // Verify that slave results sum correctly
+    const expectedValue = result.slaveResults.reduce((sum, slave) => sum + slave.value, 0);
+    
+    if (result.value !== expectedValue) {
+      throw new Error(`Cross-tenant result inconsistency: expected ${expectedValue}, got ${result.value}`);
+    }
+  }
+}
+```
+
+---
+
 ## 🔐 **Production Deployment**
 
 ### **MongoDB Setup**
@@ -1074,13 +2093,14 @@ services:
     command: mongod --replSet rs0
 ```
 
-### **S3-Compatible Providers**
+### **Storage Providers**
 
 Tested with:
-- ✅ AWS S3
-- ✅ DigitalOcean Spaces
-- ✅ MinIO
-- ✅ Cloudflare R2
+- ✅ **AWS S3**
+- ✅ **Azure Blob Storage** (NEW in v2.0.1)
+- ✅ **DigitalOcean Spaces**
+- ✅ **MinIO**
+- ✅ **Cloudflare R2**
 
 ---
 
@@ -1124,11 +2144,15 @@ Built with:
 
 ## 📋 **Frequently Asked Questions (FAQs)**
 
-### **Q: What's new in v2.0.0?**
-**A:** Chronos-DB v2.0.0 introduces a completely new architecture:
-- **Connection Reuse**: Define MongoDB/S3 connections once, reference everywhere (95% reuse)
-- **Tiered Architecture**: Proper separation of generic, domain, and tenant tiers
-- **Integrated Analytics**: Analytics databases embedded in runtime configuration
+### **Q: What's new in v2.2.0?**
+**A:** Chronos-DB v2.2.0 introduces major new features and improvements:
+- **Entity Relationships**: `insertWithEntities` and `getWithEntities` for automatic entity management
+- **Tiered Fetching**: `getKnowledge` and `getMetadata` with automatic fallback/merge across tiers
+- **Deep Merge Utility**: Smart merging of records from multiple tiers with array union
+- **Azure Storage Support**: Native support for Azure Blob Storage alongside S3-compatible providers
+- **Enhanced Analytics**: Unique counting, time-based rules, and cross-tenant analytics
+- **Worker Integration**: Comprehensive worker integration documentation
+- **Connection Reuse**: Define MongoDB/S3/Azure connections once, reference everywhere (95% reuse)
 - **Simplified Configuration**: No more nested tenant wrappers
 - **Enhanced Security**: Built-in tenant isolation and compliance features
 

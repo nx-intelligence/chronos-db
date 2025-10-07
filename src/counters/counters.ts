@@ -33,10 +33,30 @@ export interface CounterTotalsDoc {
       created?: number;
       updated?: number;
       deleted?: number;
+      // Unique counts for each property
+      unique?: {
+        [propertyName: string]: number;
+      };
     };
   };
   lastAt: Date;
 }
+
+export interface CounterUniqueDoc {
+  _id: string;
+  tenant?: string;
+  dbName: string;
+  collection: string;
+  ruleName: string;
+  propertyName: string;
+  propertyValue: any;
+  created: number;
+  updated: number;
+  deleted: number;
+  lastAt: Date;
+}
+
+export type AnalyticsDoc = CounterTotalsDoc | CounterUniqueDoc;
 
 export interface GetTotalsQuery {
   dbName: string;
@@ -86,6 +106,15 @@ export class CounterTotalsRepo {
   }
 
   /**
+   * Get nested value from object using dot notation
+   */
+  private getNestedValue(obj: Record<string, any>, path: string): any {
+    return path.split('.').reduce((current, key) => {
+      return current && current[key] !== undefined ? current[key] : undefined;
+    }, obj);
+  }
+
+  /**
    * Evaluate a counter rule against data
    */
   private evaluateRule(rule: CounterRule, data: Record<string, unknown>): boolean {
@@ -115,18 +144,6 @@ export class CounterTotalsRepo {
       }
     }
     return true;
-  }
-
-  /**
-   * Get nested value from object using dot notation
-   */
-  private getNestedValue(obj: Record<string, unknown>, path: string): unknown {
-    return path.split('.').reduce((current: unknown, key: string) => {
-      if (current && typeof current === 'object' && current !== null && key in current) {
-        return (current as Record<string, unknown>)[key];
-      }
-      return undefined;
-    }, obj);
   }
 
   /**
@@ -210,12 +227,24 @@ export class CounterTotalsRepo {
     // Evaluate rules
     const dataToEvaluate = metaIndexed || {};
     const rulesToUpdate: Record<string, any> = {};
+    const uniqueCountsToUpdate: Record<string, any> = {};
 
     for (const rule of this.rules) {
       const shouldIncrement = this.evaluateRule(rule, dataToEvaluate);
       if (shouldIncrement) {
         const rulePath = `rules.${rule.name}.${op.toLowerCase()}`;
         rulesToUpdate[rulePath] = 1;
+
+        // Handle unique counting
+        if (rule.countUnique && rule.countUnique.length > 0) {
+          for (const propertyName of rule.countUnique) {
+            const propertyValue = this.getNestedValue(dataToEvaluate, propertyName);
+            if (propertyValue !== undefined && propertyValue !== null) {
+              const uniquePath = `rules.${rule.name}.unique.${propertyName}`;
+              uniqueCountsToUpdate[uniquePath] = propertyValue;
+            }
+          }
+        }
       }
     }
 
@@ -224,11 +253,47 @@ export class CounterTotalsRepo {
     }
 
     try {
+      // Update main totals document
       await this.collection.updateOne(
         { _id: docId },
         updateOps,
         { upsert: true }
       );
+
+      // Create separate documents for each unique value
+      for (const [uniquePath, propertyValue] of Object.entries(uniqueCountsToUpdate)) {
+        const pathParts = uniquePath.split('.');
+        const ruleName = pathParts[1];
+        const propertyName = pathParts[3];
+        
+        const uniqueDocId = `${docId}_${ruleName}_${propertyName}_${propertyValue}`;
+        const uniqueUpdateOps: Record<string, any> = {
+          $inc: {
+            [op.toLowerCase()]: 1,
+          },
+          $set: {
+            lastAt: now,
+          },
+          $setOnInsert: {
+            _id: uniqueDocId,
+            tenant: scope.tenant,
+            dbName: scope.dbName,
+            collection: scope.collection,
+            ruleName: ruleName,
+            propertyName: propertyName,
+            propertyValue: propertyValue,
+            created: 0,
+            updated: 0,
+            deleted: 0,
+          },
+        };
+
+        await this.collection.updateOne(
+          { _id: uniqueDocId },
+          uniqueUpdateOps,
+          { upsert: true }
+        );
+      }
     } catch (error) {
       // Log error but don't throw - counters should never break CRUD
       console.error('Failed to bump counters:', error);
@@ -246,6 +311,23 @@ export class CounterTotalsRepo {
     const doc = await this.collection.findOne({ _id: docId });
     if (!doc) {
       return null;
+    }
+
+    // Process unique counts - convert arrays to counts
+    if (doc.rules) {
+      for (const ruleName in doc.rules) {
+        const rule = doc.rules[ruleName];
+        if (rule && rule.unique) {
+          const uniqueCounts: Record<string, number> = {};
+          for (const propertyName in rule.unique) {
+            const uniqueArray = rule.unique[propertyName];
+            if (Array.isArray(uniqueArray)) {
+              uniqueCounts[propertyName] = uniqueArray.length;
+            }
+          }
+          rule.unique = uniqueCounts;
+        }
+      }
     }
 
     // Filter rules if requested
@@ -288,5 +370,35 @@ export class CounterTotalsRepo {
       },
       { upsert: true }
     );
+  }
+
+  /**
+   * Get unique analytics results (one row per unique value)
+   */
+  async getUniqueAnalytics(query: {
+    dbName: string;
+    collection: string;
+    tenant?: string;
+    ruleName?: string;
+    propertyName?: string;
+    limit?: number;
+  }): Promise<CounterUniqueDoc[]> {
+    const { dbName, collection, tenant, ruleName, propertyName, limit = 100 } = query;
+    
+    const filter: any = {
+      dbName,
+      collection,
+      ...(tenant && { tenant }),
+      ...(ruleName && { ruleName }),
+      ...(propertyName && { propertyName }),
+    };
+
+    const cursor = this.collection.find(filter).limit(limit).sort({ lastAt: -1 });
+    const docs = await cursor.toArray();
+    
+    // Filter to only return documents that have unique analytics fields
+    return docs.filter((doc: any) => 
+      doc.ruleName && doc.propertyName && doc.propertyValue !== undefined
+    ) as CounterUniqueDoc[];
   }
 }

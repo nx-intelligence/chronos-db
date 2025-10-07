@@ -16,6 +16,7 @@ import type {
 } from '../config.js';
 import { LocalStorageAdapter } from '../storage/localStorage.js';
 import { S3StorageAdapter } from '../storage/s3Adapter.js';
+import { AzureBlobStorageAdapter } from '../storage/azureAdapter.js';
 import type { StorageAdapter } from '../storage/interface.js';
 import { logger } from '../utils/logger.js';
 
@@ -480,7 +481,7 @@ export class BridgeRouter {
       throw new Error(`Cannot resolve spaces connection for context: ${JSON.stringify(ctx)}`);
     }
     
-    // Use localStorage if enabled, otherwise use S3
+    // Use localStorage if enabled, otherwise use S3 or Azure
     if (this.localStorage) {
       return { 
         storage: this.localStorage, 
@@ -489,7 +490,26 @@ export class BridgeRouter {
       };
     }
     
-    // Create S3 client
+    // Check if this is an Azure Blob Storage connection
+    const isAzureConnection = spacesConn.endpoint.includes('blob.core.windows.net') || 
+                             spacesConn.endpoint.includes('blob.storage.azure.net');
+    
+    if (isAzureConnection) {
+      // Create Azure Blob Storage adapter
+      const storage = new AzureBlobStorageAdapter(
+        spacesConn.accessKey, // Azure account name
+        spacesConn.secretKey,  // Azure account key
+        spacesConn.endpoint    // Custom endpoint if provided
+      );
+      
+      return { 
+        storage, 
+        bucket, 
+        ...(dbInfo.analyticsDbName && { analyticsDbName: dbInfo.analyticsDbName })
+      };
+    }
+    
+    // Create S3 client for S3-compatible storage
     const spacesHash = this.hashString(`${spacesConn.endpoint}-${spacesConn.region}`);
     let s3Client = this.s3Clients.get(spacesHash);
     

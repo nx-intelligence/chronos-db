@@ -110,9 +110,49 @@ export const CounterRuleSchema = z.object({
   on: z.array(z.enum(['CREATE', 'UPDATE', 'DELETE'])).optional(),
   scope: z.enum(['meta', 'payload']).default('meta'),
   when: CounterPredicateSchema,
+  countUnique: z.array(z.string().min(1, 'Property name cannot be empty')).optional(),
 });
 
-// Counters rules schema
+// Time-based analytics rule schema
+export const TimeBasedRuleSchema = z.object({
+  name: z.string().min(1, 'Rule name is required'),
+  collection: z.string().min(1, 'Collection name is required'),
+  query: z.record(z.any()),
+  operation: z.enum(['count', 'sum', 'average', 'max', 'min', 'median']),
+  field: z.string().optional(),
+  saveMode: z.enum(['global', 'timeframe']),
+  timeframe: z.enum(['hourly', 'daily', 'monthly']).optional(),
+  arguments: z.array(z.string()).optional(),
+  relativeTime: z.object({
+    newerThan: z.string().optional(),
+    olderThan: z.string().optional(),
+  }).optional(),
+});
+
+// Cross-tenant analytics rule schema
+export const CrossTenantRuleSchema = z.object({
+  name: z.string().min(1, 'Rule name is required'),
+  collection: z.string().min(1, 'Collection name is required'),
+  query: z.record(z.any()),
+  mode: z.enum(['boolean', 'sum', 'max', 'min', 'median']),
+  field: z.string().optional(),
+  masterTenantId: z.string().min(1, 'Master tenant ID is required'),
+  slaveTenantIds: z.array(z.string().min(1, 'Slave tenant ID cannot be empty')).min(1, 'At least one slave tenant is required'),
+  relativeTime: z.object({
+    newerThan: z.string().optional(),
+    olderThan: z.string().optional(),
+  }).optional(),
+});
+
+// Analytics configuration schema
+export const AnalyticsConfigSchema = z.object({
+  counterRules: z.array(CounterRuleSchema).optional(),
+  timeBasedRules: z.array(TimeBasedRuleSchema).optional(),
+  crossTenantRules: z.array(CrossTenantRuleSchema).optional(),
+  tenants: z.array(z.string().min(1, 'Tenant ID cannot be empty')).optional(),
+});
+
+// Counters rules schema (deprecated - use AnalyticsConfigSchema instead)
 export const CountersRulesSchema = z.object({
   rules: z.array(CounterRuleSchema).optional(),
 }).default({});
@@ -158,7 +198,7 @@ export const ChronosConfigSchema = z.object({
   retention: RetentionSchema.default({}),
   rollup: z.any().optional(),
   collectionMaps: z.record(CollectionMapSchema).optional(),
-  counterRules: CountersRulesSchema.optional(),
+  analytics: AnalyticsConfigSchema.optional(),
   devShadow: z.object({
     enabled: z.boolean(),
     ttlHours: z.number().int().positive('TTL hours must be positive'),

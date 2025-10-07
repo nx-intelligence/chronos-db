@@ -53,6 +53,32 @@ export interface Chronos {
    * Fallback queue operations (if enabled)
    */
   fallback?: FallbackApi;
+
+  /**
+   * Fetch a record from Knowledge database with tiered fallback/merge
+   * @param collection - Collection name
+   * @param filter - MongoDB filter
+   * @param options - Tiered fetch options
+   * @returns Tiered fetch result
+   */
+  getKnowledge(
+    collection: string,
+    filter: Record<string, any>,
+    options: import('./read/tiered.js').TieredFetchOptions
+  ): Promise<import('./read/tiered.js').TieredFetchResult>;
+
+  /**
+   * Fetch a record from Metadata database with tiered fallback/merge
+   * @param collection - Collection name
+   * @param filter - MongoDB filter
+   * @param options - Tiered fetch options
+   * @returns Tiered fetch result
+   */
+  getMetadata(
+    collection: string,
+    filter: Record<string, any>,
+    options: import('./read/tiered.js').TieredFetchOptions
+  ): Promise<import('./read/tiered.js').TieredFetchResult>;
 }
 
 /**
@@ -124,6 +150,37 @@ export interface BoundOps {
     data: Record<string, unknown>,
     opts: SmartInsertOptions
   ): Promise<SmartInsertResult>;
+
+  /**
+   * Insert with automatic entity relationship management
+   * Extracts entity objects, saves/updates them in their own collections,
+   * then creates the main record with references
+   * @param data - Data to insert
+   * @param entityMappings - Configuration for entity extraction and storage
+   * @param actor - Actor performing the operation
+   * @param reason - Reason for the operation
+   * @returns Insert result with entity operation details
+   */
+  insertWithEntities(
+    data: Record<string, unknown>,
+    entityMappings: import('./db/entities.js').EntityMapping[],
+    actor?: string,
+    reason?: string
+  ): Promise<import('./db/entities.js').InsertWithEntitiesResult>;
+
+  /**
+   * Get a record with automatic entity relationship fetching
+   * Fetches the main record and all related entities from their collections
+   * @param id - Main record ID
+   * @param entityMappings - Configuration for entity fetching
+   * @param opts - Read options
+   * @returns Main record and entity records
+   */
+  getWithEntities(
+    id: string,
+    entityMappings: import('./db/entities.js').EntityMapping[],
+    opts?: ReadOptions
+  ): Promise<import('./db/entities.js').GetWithEntitiesResult>;
 
   /**
    * Get an item (latest by default, or historical with ov/at)
@@ -200,7 +257,7 @@ export interface BoundOps {
 }
 
 /**
- * Counters API for analytics
+ * Analytics API for counters and advanced analytics
  */
 export interface CountersApi {
   /**
@@ -215,6 +272,20 @@ export interface CountersApi {
     includeRules?: boolean;
     rules?: string[];
   }): Promise<CounterTotalsDoc | null>;
+
+  /**
+   * Get unique analytics results (one row per unique value)
+   * @param query - Query parameters
+   * @returns Array of unique analytics documents
+   */
+  getUniqueAnalytics(query: {
+    dbName: string;
+    collection: string;
+    tenant?: string;
+    ruleName?: string;
+    propertyName?: string;
+    limit?: number;
+  }): Promise<any[]>;
 
   /**
    * Reset totals for a collection (admin operation)
@@ -505,16 +576,16 @@ export function initChronos(config: ChronosConfig): Chronos {
   });
   logger.debug('BridgeRouter initialized successfully');
 
-  // Initialize counters (only if analytics databases are configured)
+  // Initialize analytics (counters, time-based, cross-tenant)
   let countersRepo: CounterTotalsRepo | null = null;
-  const initCounters = async () => {
+  const initAnalytics = async () => {
     // Check if runtime databases have analytics configured
     if (!config.databases.runtime?.tenantDatabases) {
-      return null; // Skip counters if no runtime databases configured
+      return null; // Skip analytics if no runtime databases configured
     }
     
     if (!countersRepo) {
-      // Use the first runtime tenant database for counters
+      // Use the first runtime tenant database for analytics
       const firstTenantDb = config.databases.runtime.tenantDatabases[0];
       if (!firstTenantDb) {
         throw new Error('No runtime tenant databases configured');
@@ -525,10 +596,10 @@ export function initChronos(config: ChronosConfig): Chronos {
         throw new Error(`Database connection '${firstTenantDb.dbConnRef}' not found`);
       }
       
-      const countersClient = new MongoClient(dbConn.mongoUri);
-      await countersClient.connect();
-      const countersDb = countersClient.db(firstTenantDb.analyticsDbName);
-      countersRepo = new CounterTotalsRepo(countersDb, config.counterRules?.rules || []);
+      const analyticsClient = new MongoClient(dbConn.mongoUri);
+      await analyticsClient.connect();
+      const analyticsDb = analyticsClient.db(firstTenantDb.analyticsDbName);
+      countersRepo = new CounterTotalsRepo(analyticsDb, config.analytics?.counterRules || []);
       await countersRepo.ensureIndexes();
     }
     return countersRepo;
@@ -672,6 +743,38 @@ export function initChronos(config: ChronosConfig): Chronos {
           }
           return await smartInsert(router, ctx, data, opts, smartConfig);
         },
+        insertWithEntities: async (
+          data: Record<string, unknown>,
+          entityMappings: import('./db/entities.js').EntityMapping[],
+          actor?: string,
+          reason?: string
+        ) => {
+          const { insertWithEntities } = await import('./db/entities.js');
+          return await insertWithEntities({
+            record: data,
+            collection: ctx.collection,
+            entityMappings,
+            ctx,
+            requester: actor || 'system',
+            reason: reason || 'insertWithEntities',
+            router,
+          });
+        },
+        getWithEntities: async (
+          id: string,
+          entityMappings: import('./db/entities.js').EntityMapping[],
+          opts?: ReadOptions
+        ) => {
+          const { getWithEntities } = await import('./db/entities.js');
+          return await getWithEntities({
+            id,
+            collection: ctx.collection,
+            entityMappings,
+            ctx,
+            router,
+            ...(opts && { readOptions: opts }),
+          });
+        },
         getItem: async (id: string, opts?: ReadOptions) => {
           const readCtx: ReadContext = {
             dbName: ctx.dbName,
@@ -735,16 +838,23 @@ export function initChronos(config: ChronosConfig): Chronos {
 
     counters: {
       getTotals: async (query) => {
-        const repo = await initCounters();
+        const repo = await initAnalytics();
         if (!repo) {
-          throw new Error('Counters not configured - add counters config to enable this functionality');
+          throw new Error('Analytics not configured - add analytics config to enable this functionality');
         }
         return await repo.getTotals(query);
       },
-      resetTotals: async (query) => {
-        const repo = await initCounters();
+      getUniqueAnalytics: async (query) => {
+        const repo = await initAnalytics();
         if (!repo) {
-          throw new Error('Counters not configured - add counters config to enable this functionality');
+          throw new Error('Analytics not configured - add analytics config to enable this functionality');
+        }
+        return await repo.getUniqueAnalytics(query);
+      },
+      resetTotals: async (query) => {
+        const repo = await initAnalytics();
+        if (!repo) {
+          throw new Error('Analytics not configured - add analytics config to enable this functionality');
         }
         await repo.resetTotals(query);
       },
@@ -841,6 +951,24 @@ export function initChronos(config: ChronosConfig): Chronos {
         },
       }
     } : {}),
+
+    getKnowledge: async (
+      collection: string,
+      filter: Record<string, any>,
+      options: import('./read/tiered.js').TieredFetchOptions
+    ) => {
+      const { getKnowledge } = await import('./read/tiered.js');
+      return await getKnowledge(router, collection, filter, options);
+    },
+
+    getMetadata: async (
+      collection: string,
+      filter: Record<string, any>,
+      options: import('./read/tiered.js').TieredFetchOptions
+    ) => {
+      const { getMetadata } = await import('./read/tiered.js');
+      return await getMetadata(router, collection, filter, options);
+    },
   };
 }
 
@@ -876,7 +1004,13 @@ export * from './fallback/wrapper.js';
 
 // Counters and enrichment
 export * from './counters/counters.js';
+export * from './analytics/advancedAnalytics.js';
 export * from './service/enrich.js';
+
+// Entity relationships and tiered fetching
+export * from './db/entities.js';
+export * from './read/tiered.js';
+export * from './read/merge.js';
 
 // Re-export main types for convenience
 export type {
