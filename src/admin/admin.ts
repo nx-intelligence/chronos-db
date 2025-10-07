@@ -29,7 +29,7 @@ export interface BackendInfo {
 /**
  * Check health of all backends
  * @param router - Bridge router instance
- * @param config - UDM configuration
+ * @param config - Chronos configuration
  * @returns Health report
  */
 export async function health(router: BridgeRouter, config: ChronosConfig): Promise<HealthReport> {
@@ -131,7 +131,7 @@ export async function listBackends(router: BridgeRouter): Promise<BackendInfo[]>
 /**
  * Shutdown all connections
  * @param router - Bridge router instance
- * @param config - UDM configuration
+ * @param config - Chronos configuration
  */
 export async function shutdown(router: BridgeRouter, config: ChronosConfig): Promise<void> {
   // Shutdown router (closes all MongoDB connections)

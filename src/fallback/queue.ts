@@ -12,7 +12,7 @@ export class FallbackQueue {
   private readonly options: FallbackQueueOptions;
 
   constructor(db: Db, options: FallbackQueueOptions) {
-    this.queueCol = db.collection<FallbackOp>('udm_fallback_ops');
+    this.queueCol = db.collection<FallbackOp>('chronos_fallback_ops');
     this.deadLetterCol = db.collection<DeadLetterOp>(options.deadLetterCollection);
     this.options = options;
   }

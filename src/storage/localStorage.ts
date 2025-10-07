@@ -12,7 +12,7 @@ import { logger } from '../utils/logger.js';
  * Local storage adapter that implements StorageAdapter interface using the filesystem
  * WARNING: For development/testing only, NOT recommended for production!
  * 
- * This adapter allows you to use UDM with just MongoDB and a local folder,
+ * This adapter allows you to use Chronos-DB with just MongoDB and a local folder,
  * making it easy to test and play with the package without S3.
  */
 export class LocalStorageAdapter implements StorageAdapter {

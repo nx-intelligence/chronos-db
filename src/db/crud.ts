@@ -38,7 +38,7 @@ import { CounterTotalsRepo } from '../counters/counters.js';
  */
 export function isLogicalDeleteEnabled(): boolean {
   const config = getGlobalConfig();
-  return config.logicalDelete?.enabled !== false; // Default to true
+  return config?.logicalDelete?.enabled !== false; // Default to true
 }
 
 /**
@@ -46,7 +46,7 @@ export function isLogicalDeleteEnabled(): boolean {
  */
 export function isVersioningEnabled(): boolean {
   const config = getGlobalConfig();
-  return config.versioning?.enabled !== false; // Default to true
+  return config?.versioning?.enabled !== false; // Default to true
 }
 
 /**
@@ -71,7 +71,7 @@ async function bumpCountersIfNeeded(
   }
 
   const config = getGlobalConfig();
-  if (!config.counters) {
+  if (!config?.counters) {
     return; // Skip counters if not configured
   }
 

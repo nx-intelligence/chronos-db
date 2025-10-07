@@ -1,15 +1,15 @@
-import type { UdmConfig } from '../config.js';
+import type { ChronosConfig } from '../config.js';
 
 /**
  * Global configuration storage for access throughout the application
  */
-let globalChronosConfig: UdmConfig | null = null;
+let globalChronosConfig: ChronosConfig | null = null;
 
 /**
  * Set the global configuration
  * @param config - Configuration to store globally
  */
-export function setGlobalConfig(config: UdmConfig): void {
+export function setGlobalConfig(config: ChronosConfig): void {
   globalChronosConfig = config;
 }
 
@@ -17,7 +17,7 @@ export function setGlobalConfig(config: UdmConfig): void {
  * Get the global configuration
  * @returns Current global configuration or null
  */
-export function getGlobalConfig(): UdmConfig | null {
+export function getGlobalConfig(): ChronosConfig | null {
   return globalChronosConfig;
 }
 

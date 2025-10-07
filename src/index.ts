@@ -473,7 +473,7 @@ export interface PruneResult {
 /**
  * Initialize the Unified Data Manager with the given configuration
  * @param config - Configuration object
- * @returns Udm instance
+ * @returns Chronos instance
  * @throws Error if configuration is invalid
  */
 export function initChronos(config: ChronosConfig): Chronos {
@@ -551,7 +551,7 @@ export function initChronos(config: ChronosConfig): Chronos {
   if (config.fallback?.enabled && fallbackMongoUri) {
     const fallbackClient = new MongoClient(fallbackMongoUri);
     fallbackClient.connect().then(() => {
-      const fallbackDb = fallbackClient.db('udm_system');
+      const fallbackDb = fallbackClient.db('chronos_system');
       if (config.fallback) {
         fallbackQueue = new FallbackQueue(fallbackDb, config.fallback);
       }

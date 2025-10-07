@@ -45,7 +45,7 @@ export interface SmartInsertResult {
 /**
  * Smart insert: Check if record exists by unique keys, merge if exists, create if not
  * 
- * This is like MongoDB's upsert, but with UDM's enrichment merge semantics:
+ * This is like MongoDB's upsert, but with Chronos-DB's enrichment merge semantics:
  * - If no matching record exists → CREATE new record
  * - If matching record exists → ENRICH (deep merge) into existing record
  * 

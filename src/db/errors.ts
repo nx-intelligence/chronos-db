@@ -178,18 +178,18 @@ export class ExternalizationError extends CrudError {
 /**
  * Simple error class for restore operations
  */
-export class UdmError extends Error {
+export class ChronosError extends Error {
   constructor(message: string, public code: string, public details?: Record<string, unknown>) {
     super(message);
     this.name = this.constructor.name;
-    Object.setPrototypeOf(this, UdmError.prototype);
+    Object.setPrototypeOf(this, ChronosError.prototype);
   }
 }
 
 /**
  * Simple validation error
  */
-export class SimpleValidationError extends UdmError {
+export class SimpleValidationError extends ChronosError {
   constructor(message: string, details?: Record<string, unknown>) {
     super(message, 'VALIDATION_ERROR', details);
     Object.setPrototypeOf(this, SimpleValidationError.prototype);
@@ -199,7 +199,7 @@ export class SimpleValidationError extends UdmError {
 /**
  * Simple not found error
  */
-export class SimpleNotFoundError extends UdmError {
+export class SimpleNotFoundError extends ChronosError {
   constructor(message: string, details?: Record<string, unknown>) {
     super(message, 'NOT_FOUND', details);
     Object.setPrototypeOf(this, SimpleNotFoundError.prototype);
@@ -209,7 +209,7 @@ export class SimpleNotFoundError extends UdmError {
 /**
  * Simple optimistic lock error
  */
-export class SimpleOptimisticLockError extends UdmError {
+export class SimpleOptimisticLockError extends ChronosError {
   constructor(message: string, details?: Record<string, unknown>) {
     super(message, 'OPTIMISTIC_LOCK_FAILED', details);
     Object.setPrototypeOf(this, SimpleOptimisticLockError.prototype);
@@ -219,7 +219,7 @@ export class SimpleOptimisticLockError extends UdmError {
 /**
  * Simple transaction error
  */
-export class SimpleTxnError extends UdmError {
+export class SimpleTxnError extends ChronosError {
   constructor(message: string, details?: Record<string, unknown>) {
     super(message, 'TRANSACTION_ERROR', details);
     Object.setPrototypeOf(this, SimpleTxnError.prototype);
@@ -229,7 +229,7 @@ export class SimpleTxnError extends UdmError {
 /**
  * Simple CRUD error
  */
-export class SimpleCrudError extends UdmError {
+export class SimpleCrudError extends ChronosError {
   constructor(message: string, details?: Record<string, unknown>) {
     super(message, 'CRUD_ERROR', details);
     Object.setPrototypeOf(this, SimpleCrudError.prototype);
