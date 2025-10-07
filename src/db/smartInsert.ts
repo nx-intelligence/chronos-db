@@ -80,8 +80,8 @@ export async function smartInsert(
     throw new Error('smartInsert requires at least one unique key');
   }
 
-  const routeInfo = router.getRouteInfo(ctx);
-  const mongoClient = await router.getMongo(routeInfo.index);
+  const routeInfo = router.route(ctx);
+  const mongoClient = await router.getMongoClient(routeInfo.mongoUri);
   const mongo = mongoClient.db(ctx.dbName);
   const repos = new Repos(mongo, ctx.collection);
 

@@ -104,11 +104,12 @@ export async function getItem(
     tenantId: ctx.tenantId
   });
 
-  const routeInfo = router.getRouteInfo(ctx);
-  const mongoClient = await router.getMongo(routeInfo.index);
+  const routeInfo = router.route(ctx);
+  const mongoClient = await router.getMongoClient(routeInfo.mongoUri);
   const mongo = mongoClient.db(ctx.dbName);
-  const storage = router.getStorage(routeInfo.index);
-  const spaces = router.getSpaces(routeInfo.index);
+  const spacesInfo = await router.getSpaces(ctx);
+  const storage = spacesInfo.storage;
+  const spaces = spacesInfo;
   
   if (!mongo || !storage || !spaces) {
     throw new Error('Backend not available');
@@ -213,11 +214,12 @@ export async function query(
   filter: MetaFilter,
   opts: QueryOptions = {}
 ): Promise<{ items: ItemView[]; pageToken?: string }> {
-  const routeInfo = router.getRouteInfo(ctx);
-  const mongoClient = await router.getMongo(routeInfo.index);
+  const routeInfo = router.route(ctx);
+  const mongoClient = await router.getMongoClient(routeInfo.mongoUri);
   const mongo = mongoClient.db(ctx.dbName);
-  const storage = router.getStorage(routeInfo.index);
-  const spaces = router.getSpaces(routeInfo.index);
+  const spacesInfo = await router.getSpaces(ctx);
+  const storage = spacesInfo.storage;
+  const spaces = spacesInfo;
   
   if (!mongo || !storage || !spaces) {
     throw new Error('Backend not available');

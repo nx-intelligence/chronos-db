@@ -5,7 +5,7 @@
 import { ObjectId } from 'mongodb';
 import { BridgeRouter } from '../router/router.js';
 import { Repos } from '../db/repos.js';
-import type { RouteContext } from '../router/router.js';
+import type { RouteContext } from '../config.js';
 import { 
   markAsProcessed, 
   shouldMarkAsProcessed, 
@@ -62,8 +62,8 @@ export async function markItemsAsProcessedByTTL(
     throw new Error('State transition operation requires explicit confirmation');
   }
 
-  const routeInfo = router.getRouteInfo(ctx);
-  const mongoClient = await router.getMongo(routeInfo.index);
+  const routeInfo = router.route(ctx);
+  const mongoClient = await router.getMongoClient(routeInfo.mongoUri);
   const mongo = mongoClient.db(ctx.dbName);
   
   if (!mongo) {
@@ -159,8 +159,8 @@ export async function markItemAsProcessed(
   id: string,
   opts: StateTransitionOptions = {}
 ): Promise<boolean> {
-  const routeInfo = router.getRouteInfo(ctx);
-  const mongoClient = await router.getMongo(routeInfo.index);
+  const routeInfo = router.route(ctx);
+  const mongoClient = await router.getMongoClient(routeInfo.mongoUri);
   const mongo = mongoClient.db(ctx.dbName);
   
   if (!mongo) {

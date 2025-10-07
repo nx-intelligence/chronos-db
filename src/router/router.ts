@@ -54,6 +54,7 @@ export interface BackendInfo {
   region: string;
   bucket: string;
   analyticsDbName?: string;
+  routingKey?: string;
 }
 
 // ============================================================================
@@ -617,6 +618,7 @@ export class BridgeRouter {
       region: spacesConn.region,
       bucket,
       ...(dbInfo.analyticsDbName && { analyticsDbName: dbInfo.analyticsDbName }),
+      routingKey: this.generateRoutingKey(ctx),
     };
   }
 

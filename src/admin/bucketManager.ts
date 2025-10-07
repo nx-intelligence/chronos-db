@@ -5,7 +5,7 @@
 
 import { S3Client, CreateBucketCommand, HeadBucketCommand, ListBucketsCommand } from '@aws-sdk/client-s3';
 import { BridgeRouter } from '../router/router.js';
-import type { RouteContext } from '../router/router.js';
+import type { RouteContext } from '../config.js';
 import { logger } from '../utils/logger.js';
 
 // ============================================================================
@@ -71,24 +71,23 @@ export async function ensureBucketsExist(
     throw new Error('Bucket management operation requires explicit confirmation or dry run');
   }
 
-  const routeInfo = router.getRouteInfo(ctx);
-  const s3Client = router.getS3(routeInfo.index);
-  const spaces = router.getSpaces(routeInfo.index);
+  router.route(ctx);
+  const spacesInfo = await router.getSpaces(ctx);
   
-  if (!s3Client || !spaces) {
-    throw new Error('S3 client or spaces configuration not available');
+  if (!spacesInfo.storage) {
+    throw new Error('S3 client not available');
   }
 
-  // Ensure we have a proper SpacesConnConfig with all required properties
-  const spacesConfig = spaces as any; // Type assertion for SpacesConnConfig
-  if (!spacesConfig.endpoint || !spacesConfig.region) {
-    throw new Error('Invalid spaces configuration - missing endpoint or region');
+  // Get the underlying S3Client from the StorageAdapter
+  const s3Client = (spacesInfo.storage as any).s3Client;
+  if (!s3Client) {
+    throw new Error('S3 client not available in storage adapter');
   }
 
   const requiredBuckets = [
-    { name: spaces.buckets.json, purpose: 'JSON documents' },
-    { name: spaces.buckets.content, purpose: 'Binary content' },
-    ...(spaces.buckets.backup ? [{ name: spaces.buckets.backup, purpose: 'Backups and manifests' }] : []),
+    { name: spacesInfo.bucket, purpose: 'JSON documents' },
+    { name: spacesInfo.bucket, purpose: 'Binary content' },
+    { name: spacesInfo.bucket, purpose: 'Backups and manifests' },
   ];
 
   let bucketsChecked = 0;
@@ -109,7 +108,7 @@ export async function ensureBucketsExist(
 
     if (!status.exists && opts.createIfMissing && !opts.dryRun) {
         try {
-          await createBucket(s3Client, bucket.name, spacesConfig.region);
+          await createBucket(s3Client, bucket.name, 'us-east-1');
           status.created = true;
           status.exists = true;
           status.accessible = true;
@@ -118,7 +117,7 @@ export async function ensureBucketsExist(
           logger.info('Created bucket', {
             bucketName: bucket.name,
             purpose: bucket.purpose,
-            region: spacesConfig.region
+            region: 'us-east-1'
           });
       } catch (error) {
         status.error = error instanceof Error ? error.message : 'Unknown error';
@@ -238,8 +237,9 @@ export async function testS3Connectivity(
   ctx: RouteContext
 ): Promise<{ success: boolean; buckets: string[]; error?: string }> {
   try {
-    const routeInfo = router.getRouteInfo(ctx);
-    const s3Client = router.getS3(routeInfo.index);
+    router.route(ctx);
+    const spacesInfo = await router.getSpaces(ctx);
+    const s3Client = (spacesInfo.storage as any).s3Client;
     
     if (!s3Client) {
       return { success: false, buckets: [], error: 'S3 client not available' };
@@ -248,7 +248,7 @@ export async function testS3Connectivity(
     const command = new ListBucketsCommand({});
     const result = await s3Client.send(command);
     
-    const buckets = result.Buckets?.map(bucket => bucket.Name || '').filter(Boolean) || [];
+    const buckets = result.Buckets?.map((bucket: any) => bucket.Name || '').filter(Boolean) || [];
     
     logger.info('S3 connectivity test successful', {
       collection: ctx.collection,
@@ -285,8 +285,9 @@ export async function validateSpacesConfiguration(
   const recommendations: string[] = [];
 
   try {
-    const routeInfo = router.getRouteInfo(ctx);
-    const spaces = router.getSpaces(routeInfo.index);
+    router.route(ctx);
+    const spacesInfo = await router.getSpaces(ctx);
+    const spaces = spacesInfo;
     
     if (!spaces) {
       issues.push('Spaces configuration not available');

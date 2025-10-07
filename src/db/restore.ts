@@ -80,15 +80,8 @@ export async function restoreObject(
 
   try {
     // 1. Route & bind
-    const routeInfo = router.getRouteInfo(ctx);
-    if (!routeInfo.backend) {
-      throw new CrudError(`No backend found for route context: ${JSON.stringify(ctx)}`, {
-        collection: ctx.collection,
-        targetSpec: to,
-      });
-    }
-
-    const mongoClient = await router.getMongo(routeInfo.index);
+    const routeInfo = router.route(ctx);
+    const mongoClient = await router.getMongoClient(routeInfo.mongoUri);
     const mongo = mongoClient.db(ctx.dbName);
     const repos = new Repos(mongo, ctx.collection);
 
@@ -139,7 +132,7 @@ export async function restoreObject(
       session = mongoClient.startSession();
       await session.withTransaction(async () => {
         // Increment collection version
-        cv = await repos.incCv(session!);
+        cv = await repos.incCv(session);
 
         // Create new OV
         const newOv = head.ov + 1;
@@ -235,15 +228,8 @@ export async function restoreCollection(
 
   try {
     // 1. Route & bind
-    const routeInfo = router.getRouteInfo(ctx);
-    if (!routeInfo.backend) {
-      throw new CrudError(`No backend found for route context: ${JSON.stringify(ctx)}`, {
-        collection: ctx.collection,
-        targetSpec: to,
-      });
-    }
-
-    const mongoClient = await router.getMongo(routeInfo.index);
+    const routeInfo = router.route(ctx);
+    const mongoClient = await router.getMongoClient(routeInfo.mongoUri);
     const mongo = mongoClient.db(ctx.dbName);
     const repos = new Repos(mongo, ctx.collection);
 
