@@ -1037,12 +1037,29 @@ tenantDatabases: [
 
 ## 🔐 **Production Deployment**
 
-### **MongoDB Replica Set (REQUIRED)**
+### **MongoDB Setup**
 
-⚠️ **MongoDB MUST run as a 3-node replica set in production**
+Chronos-DB works with **any MongoDB setup** - standalone instances, replica sets, or sharded clusters.
+
+**Recommended for Production:**
+- **Replica Set** (3+ nodes) for high availability and transaction support
+- **Standalone MongoDB** works perfectly for development and smaller deployments
 
 ```bash
-# Example docker-compose.yml
+# Option 1: Standalone MongoDB (works out of the box)
+mongodb://localhost:27017/dbname
+
+# Option 2: Replica Set (recommended for production)
+mongodb://mongo1:27017,mongo2:27017,mongo3:27017/dbname?replicaSet=rs0
+```
+
+**Transaction Support:**
+- **Replica Sets**: Full transaction support with ACID guarantees
+- **Standalone**: Automatic fallback to non-transactional operations
+- **Auto-detection**: Chronos-DB automatically detects MongoDB capabilities
+
+```bash
+# Example docker-compose.yml for replica set (optional)
 services:
   mongo1:
     image: mongo:6
@@ -1055,11 +1072,6 @@ services:
   mongo3:
     image: mongo:6
     command: mongod --replSet rs0
-```
-
-Connection string:
-```
-mongodb://mongo1:27017,mongo2:27017,mongo3:27017/dbname?replicaSet=rs0
 ```
 
 ### **S3-Compatible Providers**
