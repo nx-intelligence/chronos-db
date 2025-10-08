@@ -12,6 +12,7 @@ import type {
   RuntimeTenantDatabase, 
   LogsDatabase,
   MessagingDatabase,
+  IdentitiesDatabase,
   LocalStorageConfig,
   RouteContext
 } from '../config.js';
@@ -44,6 +45,7 @@ export interface RouterInitArgs {
     };
     logs?: LogsDatabase;
     messaging?: MessagingDatabase;
+    identities?: IdentitiesDatabase;
   };
   localStorage?: LocalStorageConfig | undefined;
   hashAlgo?: 'rendezvous' | 'jump';
@@ -87,6 +89,7 @@ export class BridgeRouter {
     };
     logs?: LogsDatabase;
     messaging?: MessagingDatabase;
+    identities?: IdentitiesDatabase;
   };
   
   // Connection pools (lazy initialization)
@@ -380,6 +383,16 @@ export class BridgeRouter {
         return { 
           mongoUri: messagingDbConn.mongoUri, 
           dbName: this.databases.messaging.dbName
+        };
+        
+      case 'identities':
+        if (!this.databases.identities) return null;
+        
+        const identitiesDbConn = this.findDbConnection(this.databases.identities.dbConnRef);
+        if (!identitiesDbConn) return null;
+        return { 
+          mongoUri: identitiesDbConn.mongoUri, 
+          dbName: this.databases.identities.dbName
         };
     }
     

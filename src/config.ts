@@ -132,6 +132,17 @@ export interface MessagingDatabase {
 }
 
 /**
+ * Identities database configuration (simple flat structure, like logs)
+ * For users, accounts, authentication, permissions, roles (no versioning, no S3/Azure offload)
+ */
+export interface IdentitiesDatabase {
+  /** MongoDB connection reference */
+  dbConnRef: string;
+  /** MongoDB database name */
+  dbName: string;
+}
+
+/**
  * Routing configuration
  */
 export interface RoutingConfig {
@@ -317,6 +328,8 @@ export interface ChronosConfig {
     logs?: LogsDatabase;
     /** Messaging database (simple flat structure, for Chronow integration) */
     messaging?: MessagingDatabase;
+    /** Identities database (simple flat structure, for users/accounts/auth/permissions) */
+    identities?: IdentitiesDatabase;
   };
   /** Local filesystem storage (for development/testing, NOT recommended for production) */
   localStorage?: LocalStorageConfig | undefined;
@@ -361,7 +374,7 @@ export interface RouteContext {
   /** Key for direct routing */
   key?: string;
   /** Database type */
-  databaseType?: 'metadata' | 'knowledge' | 'runtime' | 'logs' | 'messaging';
+  databaseType?: 'metadata' | 'knowledge' | 'runtime' | 'logs' | 'messaging' | 'identities';
   /** Tier */
   tier?: 'generic' | 'domain' | 'tenant';
   /** Tenant ID */

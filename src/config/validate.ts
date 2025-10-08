@@ -70,6 +70,12 @@ export const MessagingDatabaseSchema = z.object({
   captureDeliveries: z.boolean().optional(),
 });
 
+// Identities database schema (simple flat structure, like logs)
+export const IdentitiesDatabaseSchema = z.object({
+  dbConnRef: z.string().min(1, 'Database connection reference is required'),
+  dbName: z.string().min(1, 'Database name is required'),
+});
+
 // Metadata databases schema
 export const MetadataDatabasesSchema = z.object({
   genericDatabase: GenericDatabaseSchema,
@@ -197,6 +203,7 @@ export const ChronosConfigSchema = z.object({
     runtime: RuntimeDatabasesSchema.optional(),
     logs: LogsDatabaseSchema.optional(),
     messaging: MessagingDatabaseSchema.optional(),
+    identities: IdentitiesDatabaseSchema.optional(),
   }),
   localStorage: z.object({
     basePath: z.string().min(1, 'Base path is required for local storage'),
