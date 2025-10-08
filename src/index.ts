@@ -79,6 +79,13 @@ export interface Chronos {
     filter: Record<string, any>,
     options: import('./read/tiered.js').TieredFetchOptions
   ): Promise<import('./read/tiered.js').TieredFetchResult>;
+
+  /**
+   * Get messaging API for a specific tenant (Chronow integration)
+   * @param tenantId - Tenant identifier
+   * @returns Messaging API instance
+   */
+  messaging(tenantId: string): import('./messaging/messagingApi.js').MessagingApi;
 }
 
 /**
@@ -969,6 +976,81 @@ export function initChronos(config: ChronosConfig): Chronos {
       const { getMetadata } = await import('./read/tiered.js');
       return await getMetadata(router, collection, filter, options);
     },
+
+    messaging: (tenantId: string) => {
+      // Resolve messaging database connection (single database for all tenants)
+      const dbInfo = router.resolveDatabaseConnection({ 
+        databaseType: 'messaging',
+        dbName: '',  // Not used for messaging (single DB for all)
+        collection: ''  // Not used for messaging
+      });
+      
+      if (!dbInfo) {
+        throw new Error('No messaging database configured');
+      }
+
+      // Get MongoDB client
+      const mongoClientPromise = router.getMongoClient(dbInfo.mongoUri);
+      
+      // Get captureDeliveries flag from config
+      const captureDeliveries = config.databases.messaging?.captureDeliveries ?? false;
+
+      // Import and create messaging API
+      const { createMessagingApi } = require('./messaging/messagingApi.js');
+      
+      // Create proxy that lazily initializes on first method call
+      let cachedClient: any = null;
+      let apiInstance: any = null;
+      
+      const getClient = async () => {
+        if (!cachedClient) {
+          cachedClient = await mongoClientPromise;
+        }
+        return cachedClient;
+      };
+      
+      const getApi = async () => {
+        if (!apiInstance) {
+          const client = await getClient();
+          apiInstance = createMessagingApi({
+            mongoClient: client,
+            dbName: dbInfo.dbName,
+            tenantId,
+            captureDeliveries,
+          });
+        }
+        return apiInstance;
+      };
+
+      // Return proxy object that matches MessagingApi interface
+      return {
+        shared: {
+          save: async (opts: any) => (await getApi()).shared.save(opts),
+          load: async (opts: any) => (await getApi()).shared.load(opts),
+          tombstone: async (opts: any) => (await getApi()).shared.tombstone(opts),
+        },
+        topics: {
+          ensure: async (opts: any) => (await getApi()).topics.ensure(opts),
+          get: async (opts: any) => (await getApi()).topics.get(opts),
+        },
+        messages: {
+          save: async (opts: any) => (await getApi()).messages.save(opts),
+          get: async (opts: any) => (await getApi()).messages.get(opts),
+          list: async (opts: any) => (await getApi()).messages.list(opts),
+        },
+        get deliveries() {
+          if (!captureDeliveries) return undefined;
+          return {
+            append: async (opts: any) => (await getApi()).deliveries?.append(opts),
+            listByMessage: async (opts: any) => (await getApi()).deliveries?.listByMessage(opts),
+          };
+        },
+        deadLetters: {
+          save: async (opts: any) => (await getApi()).deadLetters.save(opts),
+          list: async (opts: any) => (await getApi()).deadLetters.list(opts),
+        },
+      } as any;
+    },
   };
 }
 
@@ -1011,6 +1093,10 @@ export * from './service/enrich.js';
 export * from './db/entities.js';
 export * from './read/tiered.js';
 export * from './read/merge.js';
+
+// Messaging (Chronow integration)
+export * from './messaging/schemas.js';
+export * from './messaging/messagingApi.js';
 
 // Re-export main types for convenience
 export type {

@@ -63,6 +63,13 @@ export const LogsDatabaseSchema = z.object({
   dbName: z.string().min(1, 'Database name is required'),
 });
 
+// Messaging database schema (simple flat structure, like logs)
+export const MessagingDatabaseSchema = z.object({
+  dbConnRef: z.string().min(1, 'Database connection reference is required'),
+  dbName: z.string().min(1, 'Database name is required'),
+  captureDeliveries: z.boolean().optional(),
+});
+
 // Metadata databases schema
 export const MetadataDatabasesSchema = z.object({
   genericDatabase: GenericDatabaseSchema,
@@ -189,6 +196,7 @@ export const ChronosConfigSchema = z.object({
     knowledge: KnowledgeDatabasesSchema.optional(),
     runtime: RuntimeDatabasesSchema.optional(),
     logs: LogsDatabaseSchema.optional(),
+    messaging: MessagingDatabaseSchema.optional(),
   }),
   localStorage: z.object({
     basePath: z.string().min(1, 'Base path is required for local storage'),

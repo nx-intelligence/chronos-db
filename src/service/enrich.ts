@@ -39,7 +39,7 @@ export interface EnrichContext {
   objectId?: string;
   forcedIndex?: number;
   key?: string;
-  databaseType?: 'metadata' | 'knowledge' | 'runtime' | 'logs';
+  databaseType?: 'metadata' | 'knowledge' | 'runtime' | 'logs' | 'messaging';
   tier?: 'generic' | 'domain' | 'tenant';
   tenantId?: string;
   domain?: string;

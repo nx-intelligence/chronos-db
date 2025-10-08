@@ -11,6 +11,7 @@ import type {
   TenantDatabase, 
   RuntimeTenantDatabase, 
   LogsDatabase,
+  MessagingDatabase,
   LocalStorageConfig,
   RouteContext
 } from '../config.js';
@@ -42,6 +43,7 @@ export interface RouterInitArgs {
       tenantDatabases: RuntimeTenantDatabase[];
     };
     logs?: LogsDatabase;
+    messaging?: MessagingDatabase;
   };
   localStorage?: LocalStorageConfig | undefined;
   hashAlgo?: 'rendezvous' | 'jump';
@@ -84,6 +86,7 @@ export class BridgeRouter {
       tenantDatabases: RuntimeTenantDatabase[];
     };
     logs?: LogsDatabase;
+    messaging?: MessagingDatabase;
   };
   
   // Connection pools (lazy initialization)
@@ -368,6 +371,16 @@ export class BridgeRouter {
         const logsDbConn = this.findDbConnection(this.databases.logs.dbConnRef);
         if (!logsDbConn) return null;
         return { mongoUri: logsDbConn.mongoUri, dbName: this.databases.logs.dbName };
+        
+      case 'messaging':
+        if (!this.databases.messaging) return null;
+        
+        const messagingDbConn = this.findDbConnection(this.databases.messaging.dbConnRef);
+        if (!messagingDbConn) return null;
+        return { 
+          mongoUri: messagingDbConn.mongoUri, 
+          dbName: this.databases.messaging.dbName
+        };
     }
     
     return null;
@@ -483,7 +496,7 @@ export class BridgeRouter {
     
     // Use localStorage if enabled, otherwise use S3 or Azure
     if (this.localStorage) {
-      return { 
+      return {
         storage: this.localStorage, 
         bucket, 
         ...(dbInfo.analyticsDbName && { analyticsDbName: dbInfo.analyticsDbName })

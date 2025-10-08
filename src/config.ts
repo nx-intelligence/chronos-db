@@ -119,6 +119,19 @@ export interface LogsDatabase {
 }
 
 /**
+ * Messaging database configuration (simple flat structure, like logs)
+ * Simple MongoDB-only storage for Chronow integration (no versioning, no S3/Azure offload)
+ */
+export interface MessagingDatabase {
+  /** MongoDB connection reference */
+  dbConnRef: string;
+  /** MongoDB database name */
+  dbName: string;
+  /** Capture delivery attempts (default: false to save storage) */
+  captureDeliveries?: boolean;
+}
+
+/**
  * Routing configuration
  */
 export interface RoutingConfig {
@@ -302,6 +315,8 @@ export interface ChronosConfig {
     };
     /** Logs database (simple flat structure) */
     logs?: LogsDatabase;
+    /** Messaging database (simple flat structure, for Chronow integration) */
+    messaging?: MessagingDatabase;
   };
   /** Local filesystem storage (for development/testing, NOT recommended for production) */
   localStorage?: LocalStorageConfig | undefined;
@@ -346,7 +361,7 @@ export interface RouteContext {
   /** Key for direct routing */
   key?: string;
   /** Database type */
-  databaseType?: 'metadata' | 'knowledge' | 'runtime' | 'logs';
+  databaseType?: 'metadata' | 'knowledge' | 'runtime' | 'logs' | 'messaging';
   /** Tier */
   tier?: 'generic' | 'domain' | 'tenant';
   /** Tenant ID */

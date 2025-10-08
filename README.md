@@ -1,4 +1,4 @@
-# Chronos-DB v2.2 🚀
+# Chronos-DB v2.3 🚀
 
 > **Enterprise-Grade MongoDB Persistence Layer with Embedded Multi-Tenancy & Big Data Architecture**
 
@@ -11,7 +11,7 @@
 
 ## 🎯 **Built for Enterprise & Big Data**
 
-Chronos-DB v2.2 is designed for **large-scale enterprise applications** requiring **tenant isolation**, **data versioning**, and **complex data relationships**. Built with **embedded multi-tenancy by design** and **tiered architecture** to handle big data workloads efficiently while maintaining **enterprise-grade security and compliance**.
+Chronos-DB v2.3 is designed for **large-scale enterprise applications** requiring **tenant isolation**, **data versioning**, and **complex data relationships**. Built with **embedded multi-tenancy by design** and **tiered architecture** to handle big data workloads efficiently while maintaining **enterprise-grade security and compliance**.
 
 ### 🏢 **Enterprise Features**
 
@@ -29,7 +29,7 @@ Chronos-DB v2.2 is designed for **large-scale enterprise applications** requirin
 
 Chronos-DB v2.0 provides a production-ready persistence layer designed for **enterprise applications** and **big data projects** that combines:
 
-- **🏢 Multi-Tenant Architecture**: Built-in tenant isolation with configurable database tiers (metadata, knowledge, runtime, logs)
+- **🏢 Multi-Tenant Architecture**: Built-in tenant isolation with configurable database tiers (metadata, knowledge, runtime, logs, messaging)
 - **📊 MongoDB** for indexed metadata, head pointers, and bounded recent version index
 - **☁️ S3-compatible storage** for authoritative payloads, full JSON per version
 - **🔄 Automatic versioning** with explicit restore capabilities and time-travel queries
@@ -43,6 +43,7 @@ Chronos-DB v2.0 provides a production-ready persistence layer designed for **ent
 - **🔧 Enrichment API** for incremental updates with deep merge
 - **🔄 Fallback queues** for guaranteed durability
 - **⚡ Write optimization** for high-throughput scenarios
+- **💬 Messaging Integration**: First-class messaging database for Chronow (Redis hot + MongoDB warm/audit)
 
 ### **Key Principles**
 
@@ -2275,19 +2276,366 @@ Built with:
 
 ---
 
+## 💬 **Messaging Database (Chronow Integration)**
+
+Chronos-DB v2.3 introduces a first-class **messaging database type** designed for integration with **Chronow** (hot Redis-backed messaging + warm MongoDB durable audit). This enables dual-tier retention, DLQ auditing, and cross-tenant observability for pub/sub systems.
+
+### **Overview**
+
+The messaging database provides **simple MongoDB-only storage** (NO versioning, NO S3 offload) for:
+- **Shared Memory Snapshots**: KV snapshots with versioning strategies
+- **Topic Metadata**: Topic configuration and shard info
+- **Canonical Messages**: Published messages for audit and retrieval
+- **Delivery Tracking** (optional): Per-subscription delivery attempts
+- **Dead Letter Queue (DLQ)**: Terminally failed messages with audit trail
+
+### **Key Features**
+
+✅ **Simple & Fast**: MongoDB-only, no versioning overhead, no storage offload  
+✅ **Dual-Tier Design**: Redis hot path (Chronow) + MongoDB warm/audit (Chronos)  
+✅ **Multi-Tenant**: Tenant-scoped with isolated databases  
+✅ **Idempotent**: Safe retry/replay with duplicate detection  
+✅ **DLQ Support**: Dead letter tracking with failure reasons  
+✅ **Optional Delivery Tracking**: Control storage overhead with `captureDeliveries` flag  
+
+### **Configuration**
+
+**Single Database for All Tenants** (like `logs`):
+
+```json
+{
+  "dbConnections": {
+    "mongo-primary": {
+      "mongoUri": "mongodb://localhost:27017"
+    }
+  },
+  "spacesConnections": {},
+  "databases": {
+    "messaging": {
+      "dbConnRef": "mongo-primary",
+      "dbName": "chronos_messaging",
+      "captureDeliveries": false
+    }
+  },
+  "routing": { "hashAlgo": "rendezvous" }
+}
+```
+
+**Configuration Fields:**
+- `dbConnRef`: MongoDB connection reference (required)
+- `dbName`: MongoDB database name (required)
+- `captureDeliveries`: Enable delivery attempt tracking (optional, default: false)
+
+**Note**: The messaging database is shared across all tenants. Tenant isolation is achieved through the `tenantId` field in every document/query.
+
+### **API Usage**
+
+#### **Basic Setup**
+
+```typescript
+import { initChronos } from 'chronos-db';
+
+const chronos = initChronos(config);
+
+// Get messaging API for a tenant
+const messaging = chronos.messaging('tenant-a');
+```
+
+#### **Shared Memory (KV Snapshots)**
+
+Store shared memory snapshots with append or latest-wins strategy:
+
+```typescript
+// Latest strategy (one document per key, overwrites)
+await messaging.shared.save({
+  namespace: 'config',
+  key: 'feature-flags',
+  val: { beta: true, newUI: false },
+  strategy: 'latest'
+});
+
+// Load latest value
+const config = await messaging.shared.load({
+  namespace: 'config',
+  key: 'feature-flags',
+  strategy: 'latest'
+});
+
+// Append strategy (versioned history)
+await messaging.shared.save({
+  namespace: 'events',
+  key: 'user-session',
+  val: { action: 'login', ts: new Date() },
+  strategy: 'append'
+});
+// Returns: { id: '...', version: 0 }
+
+await messaging.shared.save({
+  namespace: 'events',
+  key: 'user-session',
+  val: { action: 'view-page', page: '/home' },
+  strategy: 'append'
+});
+// Returns: { id: '...', version: 1 }
+
+// Load specific version
+const v0 = await messaging.shared.load({
+  namespace: 'events',
+  key: 'user-session',
+  strategy: 'append',
+  version: 0
+});
+
+// Load latest version
+const latest = await messaging.shared.load({
+  namespace: 'events',
+  key: 'user-session',
+  strategy: 'append'
+});
+
+// Tombstone (delete all versions)
+await messaging.shared.tombstone({
+  namespace: 'config',
+  key: 'feature-flags',
+  reason: 'tenant-deleted'
+});
+```
+
+#### **Topics**
+
+Ensure topics exist and retrieve metadata:
+
+```typescript
+// Ensure topic exists
+await messaging.topics.ensure({
+  topic: 'payments',
+  shards: 4
+});
+
+// Get topic metadata
+const topicInfo = await messaging.topics.get({ topic: 'payments' });
+// Returns: { tenantId: 'tenant-a', topic: 'payments', shards: 4, createdAt: Date }
+```
+
+#### **Messages**
+
+Save and retrieve canonical messages:
+
+```typescript
+// Save message (idempotent)
+await messaging.messages.save({
+  topic: 'payments',
+  msgId: '171223123-0',  // Redis stream ID or ULID
+  headers: { type: 'payment.created', traceId: 'abc123' },
+  payload: { orderId: '123', amount: 100 },
+  firstSeenAt: new Date(),
+  size: 128
+});
+
+// Get specific message
+const msg = await messaging.messages.get({
+  topic: 'payments',
+  msgId: '171223123-0'
+});
+
+// List messages (with time filter)
+const recent = await messaging.messages.list({
+  topic: 'payments',
+  after: new Date(Date.now() - 86400000),  // Last 24h
+  limit: 100
+});
+```
+
+#### **Deliveries (Optional)**
+
+Track delivery attempts per subscription (enabled via `captureDeliveries: true`):
+
+```typescript
+// Append delivery attempt
+if (messaging.deliveries) {
+  await messaging.deliveries.append({
+    topic: 'payments',
+    subscription: 'payment-processor',
+    msgId: '171223123-0',
+    attempt: 1,
+    status: 'pending',
+    consumerId: 'worker-1',
+    ts: new Date()
+  });
+
+  // Update to ack
+  await messaging.deliveries.append({
+    topic: 'payments',
+    subscription: 'payment-processor',
+    msgId: '171223123-0',
+    attempt: 1,
+    status: 'ack',
+    consumerId: 'worker-1',
+    ts: new Date()
+  });
+
+  // List deliveries for a message
+  const deliveries = await messaging.deliveries.listByMessage({
+    topic: 'payments',
+    msgId: '171223123-0'
+  });
+}
+```
+
+#### **Dead Letters (DLQ)**
+
+Track terminally failed messages:
+
+```typescript
+// Save to DLQ
+await messaging.deadLetters.save({
+  topic: 'payments',
+  subscription: 'payment-processor',
+  msgId: '171223123-0',
+  headers: { type: 'payment.created' },
+  payload: { orderId: '123', amount: 100 },
+  deliveries: 5,
+  reason: 'max_retries_exceeded',
+  failedAt: new Date()
+});
+
+// List dead letters
+const dlq = await messaging.deadLetters.list({
+  topic: 'payments',
+  after: new Date(Date.now() - 86400000),  // Last 24h
+  limit: 100
+});
+```
+
+### **Collections & Indexes**
+
+The messaging database creates 5 collections with optimized indexes:
+
+#### **shared_memory**
+- `{ tenantId, namespace, key, strategy }` - Unique for latest strategy
+- `{ tenantId, namespace, key, version }` - Versioned history for append
+- `{ updatedAt }` - Freshness queries
+
+#### **topics**
+- `{ tenantId, topic }` - Unique per tenant
+
+#### **messages**
+- `{ tenantId, topic, msgId }` - Unique per tenant/topic
+- `{ firstSeenAt }` - Time-based queries
+- `{ tenantId, topic, firstSeenAt }` - Topic+time queries
+
+#### **deliveries** (if `captureDeliveries: true`)
+- `{ tenantId, topic, subscription, msgId, attempt }` - Unique per delivery
+- `{ tenantId, topic, msgId }` - Message lookup
+- `{ ts }` - Time-based cleanup
+
+#### **dead_letters**
+- `{ tenantId, topic, msgId }` - Lookup by message
+- `{ failedAt }` - Time-based queries
+- `{ tenantId, topic, failedAt }` - Topic analysis
+
+### **Retention & Lifecycle**
+
+**Messaging databases do NOT use Chronos versioning/S3 storage** - they are simple MongoDB collections.
+
+Retention is managed via **external worker scripts**:
+
+```typescript
+// Example: Clean up old deliveries (7 days)
+const db = mongoClient.db('chronos_messaging_tenant_a');
+await db.collection('deliveries').deleteMany({
+  ts: { $lt: new Date(Date.now() - 7 * 86400000) }
+});
+
+// Example: Clean up old dead letters (30 days)
+await db.collection('dead_letters').deleteMany({
+  failedAt: { $lt: new Date(Date.now() - 30 * 86400000) }
+});
+
+// Example: Enforce maxVersions for append-mode shared memory
+const maxVersions = 100;
+const keys = await db.collection('shared_memory').distinct('key', {
+  tenantId: 'tenant-a',
+  namespace: 'events',
+  strategy: 'append'
+});
+
+for (const key of keys) {
+  const docs = await db.collection('shared_memory')
+    .find({ tenantId: 'tenant-a', namespace: 'events', key, strategy: 'append' })
+    .sort({ version: -1 })
+    .skip(maxVersions)
+    .toArray();
+  
+  if (docs.length > 0) {
+    await db.collection('shared_memory').deleteMany({
+      _id: { $in: docs.map(d => d._id) }
+    });
+  }
+}
+```
+
+### **Integration with Chronow**
+
+**Chronow** (Redis-backed hot messaging) uses this messaging database for:
+
+1. **Shared Memory Persistence**: Warm storage for config/state with cache-miss fallback
+2. **Message Audit Trail**: Canonical copy of published messages for compliance
+3. **DLQ Observability**: Dead letter tracking for replay/analysis
+4. **Cross-Tenant Analytics**: Aggregate messaging metrics across tenants
+
+**Typical Flow:**
+
+```
+Chronow (Hot - Redis):
+  ├─ Publish message → Redis Stream → Subscribers
+  └─ On publish: chronos.messaging(tenant).messages.save(...)
+
+Chronos (Warm - MongoDB):
+  ├─ Stores canonical message for audit
+  ├─ Tracks DLQ for failed deliveries
+  └─ Provides long-tail retrieval (>24h)
+```
+
+### **Performance & Sizing**
+
+- **Messages**: Keep < 256KB per message (small payloads only)
+- **Indexes**: Automatically created on first write
+- **Idempotency**: Duplicate saves are ignored (MongoDB unique index)
+- **Connections**: Reuses existing MongoDB connection pool
+
+### **Security & Multi-Tenancy**
+
+- All operations are **tenant-scoped** (tenantId in every query)
+- **Single shared database** for all tenants (like logs database)
+- Tenant isolation enforced by **tenantId** in all queries and indexes
+- No cross-tenant data leakage (MongoDB queries enforce tenant boundaries)
+- **PII compliance**: Classify and mask payloads as needed
+
+---
+
 ## 📋 **Frequently Asked Questions (FAQs)**
 
+### **Q: What's new in v2.3.0?**
+**A:** Chronos-DB v2.3.0 adds first-class messaging support for Chronow integration:
+- **Messaging Database Type**: New `messaging` database type for pub/sub audit and DLQ
+- **Shared Memory Snapshots**: KV storage with append/latest strategies
+- **Message Audit Trail**: Canonical message storage for compliance
+- **Dead Letter Queue**: DLQ tracking with failure reasons
+- **Optional Delivery Tracking**: Per-subscription delivery attempts
+- **Simple & Fast**: MongoDB-only (no versioning, no S3 offload)
+- **Chronow Integration**: Dual-tier (Redis hot + MongoDB warm) messaging
+
 ### **Q: What's new in v2.2.0?**
-**A:** Chronos-DB v2.2.0 introduces major new features and improvements:
+**A:** Chronos-DB v2.2.0 introduced major new features:
 - **Entity Relationships**: `insertWithEntities` and `getWithEntities` for automatic entity management
 - **Tiered Fetching**: `getKnowledge` and `getMetadata` with automatic fallback/merge across tiers
 - **Deep Merge Utility**: Smart merging of records from multiple tiers with array union
 - **Azure Storage Support**: Native support for Azure Blob Storage alongside S3-compatible providers
 - **Enhanced Analytics**: Unique counting, time-based rules, and cross-tenant analytics
 - **Worker Integration**: Comprehensive worker integration documentation
-- **Connection Reuse**: Define MongoDB/S3/Azure connections once, reference everywhere (95% reuse)
+- **Connection Reuse**: Define MongoDB/S3/Azure connections once, reference everywhere
 - **Simplified Configuration**: No more nested tenant wrappers
-- **Enhanced Security**: Built-in tenant isolation and compliance features
 
 ### **Q: How does tenant isolation work?**
 **A:** Chronos-DB v2.0.0 provides multiple levels of tenant isolation:
