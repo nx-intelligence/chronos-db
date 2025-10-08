@@ -1,7 +1,8 @@
-# Chronos-DB v2.3 🚀
+# Xronox v2.4 🚀
 
 > **The Essential Persistence Layer for Big Data & SaaS Applications**  
 > **Enterprise-Grade MongoDB + S3/Azure with Embedded Multi-Tenancy**
+> **Formerly Chronos-DB**
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]() 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)]()
@@ -10,9 +11,9 @@
 
 ---
 
-## 🎯 **Why Chronos-DB is Essential for Big Data & SaaS**
+## 🎯 **Why Xronox is Essential for Big Data & SaaS**
 
-**Whether you're building Big Data platforms OR SaaS applications** — Chronos-DB is a **must-have** that dramatically simplifies development and slashes costs:
+**Whether you're building Big Data platforms OR SaaS applications** — Xronox is a **must-have** that dramatically simplifies development and slashes costs:
 
 ### **💰 Cost Savings**
 - **R&D Costs**: Eliminate months of building multi-tenant data infrastructure from scratch
@@ -27,7 +28,7 @@
 - **Time-to-Market**: Launch 3-6 months faster with proven architecture
 
 ### **📊 Big Data Ready**
-Chronos-DB v2.3 is designed for **large-scale applications** handling millions of records with **embedded multi-tenancy by design** and **tiered architecture** for efficient big data workloads while maintaining **enterprise-grade security and compliance**.
+Xronox v2.4 is designed for **large-scale applications** handling millions of records with **embedded multi-tenancy by design** and **tiered architecture** for efficient big data workloads while maintaining **enterprise-grade security and compliance**.
 
 ### 🏢 **Enterprise Features**
 
@@ -43,7 +44,7 @@ Chronos-DB v2.3 is designed for **large-scale applications** handling millions o
 
 ## 📖 **Architecture Overview**
 
-Chronos-DB v2.0 provides a production-ready persistence layer designed for **enterprise applications** and **big data projects** that combines:
+Xronox v2.4 provides a production-ready persistence layer designed for **enterprise applications** and **big data projects** that combines:
 
 - **🏢 Multi-Tenant Architecture**: Built-in tenant isolation with configurable database tiers (metadata, knowledge, runtime, logs, messaging, identities)
 - **📊 MongoDB** for indexed metadata, head pointers, and bounded recent version index
@@ -79,7 +80,7 @@ Chronos-DB v2.0 provides a production-ready persistence layer designed for **ent
 
 ### **🔒 Security-First Design**
 
-Chronos-DB v2.0 implements **enterprise-grade security** with multiple layers of protection:
+Xronox v2.4 implements **enterprise-grade security** with multiple layers of protection:
 
 #### **1. Tenant Isolation**
 - **Complete Data Separation**: Each tenant's data is stored in separate databases
@@ -618,13 +619,15 @@ devShadow: {
 ### **Installation**
 
 ```bash
-npm install chronos-db@^2.0.0
+npm install xronox@^2.4.0
 ```
+
+**Note:** The package was previously named `chronos-db`. Starting from v2.4.0, it's published as `xronox`.
 
 ### **Enterprise Multi-Tenant Setup**
 
 ```typescript
-import { initChronos } from 'chronos-db';
+import { initChronos } from 'xronox';
 
 const chronos = initChronos({
   // Connection definitions (95% reuse as requested)
@@ -2295,7 +2298,7 @@ Built with:
 
 ## 💬 **Messaging Database (Chronow Integration)**
 
-Chronos-DB v2.3 introduces a first-class **messaging database type** designed for integration with **Chronow** (hot Redis-backed messaging + warm MongoDB durable audit). This enables dual-tier retention, DLQ auditing, and cross-tenant observability for pub/sub systems.
+Xronox v2.4 introduces a first-class **messaging database type** designed for integration with **Chronow** (hot Redis-backed messaging + warm MongoDB durable audit). This enables dual-tier retention, DLQ auditing, and cross-tenant observability for pub/sub systems.
 
 ### **Overview**
 
@@ -2350,7 +2353,7 @@ The messaging database provides **simple MongoDB-only storage** (NO versioning, 
 #### **Basic Setup**
 
 ```typescript
-import { initChronos } from 'chronos-db';
+import { initChronos } from 'xronox';
 
 const chronos = initChronos(config);
 
@@ -2633,7 +2636,7 @@ Chronos (Warm - MongoDB):
 
 ## 👤 **Identities Database (Users, Accounts, Auth)**
 
-Chronos-DB v2.3 includes a dedicated **identities database** for managing users, accounts, authentication, permissions, and roles.
+Xronox v2.4 includes a dedicated **identities database** for managing users, accounts, authentication, permissions, and roles.
 
 ### **Overview**
 
@@ -2744,10 +2747,10 @@ While Chronos-DB doesn't enforce specific collection schemas for identities (you
 
 ### **API Usage**
 
-Use the standard Chronos-DB `with()` API with `databaseType: 'identities'`:
+Use the standard Xronox `with()` API with `databaseType: 'identities'`:
 
 ```typescript
-import { initChronos } from 'chronos-db';
+import { initChronos } from 'xronox';
 
 const chronos = initChronos(config);
 
@@ -2848,16 +2851,17 @@ The identities database is **separate** from metadata/knowledge because:
 
 ## 📋 **Frequently Asked Questions (FAQs)**
 
-### **Q: What's new in v2.3.0?**
-**A:** Chronos-DB v2.3.0 adds two essential databases for modern SaaS applications:
+### **Q: What's new in v2.4.0?**
+**A:** Xronox v2.4.0 is a rebranding from chronos-db with the same great features:
+- **New Package Name**: Now published as `xronox` (formerly `chronos-db`)
 - **Messaging Database**: First-class `messaging` database type for Chronow integration (pub/sub audit, DLQ, shared memory)
-- **Identities Database**: New `identities` database type for users, accounts, auth, permissions, roles
+- **Identities Database**: `identities` database type for users, accounts, auth, permissions, roles
 - **Big Data + SaaS Positioning**: Optimized for both Big Data platforms AND SaaS applications
 - **Cost Optimization**: R&D, server, and storage cost reductions documented
 - **MongoDB-Only Simple DBs**: Both messaging and identities are simple, fast, no versioning overhead
 
-### **Q: What's new in v2.2.0?**
-**A:** Chronos-DB v2.2.0 introduced major new features:
+### **Q: What was new in v2.2.0 (chronos-db)?**
+**A:** v2.2.0 introduced major new features:
 - **Entity Relationships**: `insertWithEntities` and `getWithEntities` for automatic entity management
 - **Tiered Fetching**: `getKnowledge` and `getMetadata` with automatic fallback/merge across tiers
 - **Deep Merge Utility**: Smart merging of records from multiple tiers with array union
@@ -2868,7 +2872,7 @@ The identities database is **separate** from metadata/knowledge because:
 - **Simplified Configuration**: No more nested tenant wrappers
 
 ### **Q: How does tenant isolation work?**
-**A:** Chronos-DB v2.0.0 provides multiple levels of tenant isolation:
+**A:** Xronox provides multiple levels of tenant isolation:
 - **Database Level**: Each tenant can have separate databases
 - **Infrastructure Level**: Each tenant can have separate MongoDB clusters and S3 buckets
 - **Network Level**: Complete network isolation between tenants
@@ -2883,21 +2887,22 @@ The identities database is **separate** from metadata/knowledge because:
 - **Implement proper access controls** at the application level
 
 ### **Q: How do I handle big data scenarios?**
-**A:** Chronos-DB v2.0.0 is optimized for big data:
+**A:** Xronox is optimized for big data:
 - **Horizontal scaling** across multiple MongoDB clusters
 - **S3 integration** for large datasets
 - **Batch operations** with write optimization
 - **Integrated analytics** for business intelligence
 - **Connection pooling** for high throughput
 
-### **Q: How do I migrate from v1.x to v2.0.0?**
-**A:** v2.0.0 is a breaking change. You'll need to:
-1. Update your configuration structure
-2. Update your routing patterns
-3. Update your analytics configuration
-4. Test thoroughly in a staging environment
+### **Q: How do I migrate from chronos-db to xronox?**
+**A:** For v2.4.0, just update your package.json and imports:
+```bash
+npm uninstall chronos-db
+npm install xronox@^2.4.0
+```
+Then update your imports from `'chronos-db'` to `'xronox'`. The API is 100% compatible.
 
-### **Q: Can I use chronos-db without S3?**
+### **Q: Can I use xronox without S3?**
 **A:** Yes! Use `localStorage` for development/testing:
 ```typescript
 const chronos = initChronos({
