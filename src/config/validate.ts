@@ -10,6 +10,22 @@ export const DbConnectionSchema = z.object({
   mongoUri: z.string().min(1, 'MongoDB URI is required'),
 });
 
+// Bucket configuration schema
+export const BucketConfigurationSchema = z.object({
+  records: z.string().min(1).optional(),
+  backups: z.string().min(1).optional(),
+  content: z.string().min(1).optional(),
+  versions: z.string().min(1).optional(),
+});
+
+// Folder prefixes schema
+export const FolderPrefixesSchema = z.object({
+  records: z.string().min(1).optional(),
+  backups: z.string().min(1).optional(),
+  content: z.string().min(1).optional(),
+  versions: z.string().min(1).optional(),
+});
+
 // S3-compatible storage connection schema
 export const SpacesConnectionSchema = z.object({
   endpoint: z.string().url('Invalid S3 endpoint URL'),
@@ -17,49 +33,85 @@ export const SpacesConnectionSchema = z.object({
   accessKey: z.string().min(1, 'Access key is required'),
   secretKey: z.string().min(1, 'Secret key is required'),
   forcePathStyle: z.boolean().optional(),
-});
+  bucket: z.string().min(1).optional(), // Legacy single bucket
+  buckets: BucketConfigurationSchema.optional(), // Multi-bucket configuration
+  folderPrefixes: FolderPrefixesSchema.optional(),
+}).refine(
+  (data) => data.bucket || data.buckets,
+  { message: 'Either bucket or buckets configuration is required' }
+);
 
 // Generic database schema
 export const GenericDatabaseSchema = z.object({
   dbConnRef: z.string().min(1, 'Database connection reference is required'),
   spaceConnRef: z.string().min(1, 'Spaces connection reference is required'),
-  bucket: z.string().min(1, 'Bucket name is required'),
+  bucket: z.string().min(1).optional(), // Legacy single bucket
+  recordsBucket: z.string().min(1).optional(),
+  versionsBucket: z.string().min(1).optional(),
+  contentBucket: z.string().min(1).optional(),
+  backupsBucket: z.string().min(1).optional(),
   dbName: z.string().min(1, 'Database name is required'),
-});
+}).refine(
+  (data) => data.bucket || data.recordsBucket || data.versionsBucket || data.contentBucket || data.backupsBucket,
+  { message: 'At least one bucket configuration is required (bucket or recordsBucket/versionsBucket/contentBucket/backupsBucket)' }
+);
 
 // Domain database schema
 export const DomainDatabaseSchema = z.object({
   domain: z.string().min(1, 'Domain identifier is required'),
   dbConnRef: z.string().min(1, 'Database connection reference is required'),
   spaceConnRef: z.string().min(1, 'Spaces connection reference is required'),
-  bucket: z.string().min(1, 'Bucket name is required'),
+  bucket: z.string().min(1).optional(), // Legacy single bucket
+  recordsBucket: z.string().min(1).optional(),
+  versionsBucket: z.string().min(1).optional(),
+  contentBucket: z.string().min(1).optional(),
+  backupsBucket: z.string().min(1).optional(),
   dbName: z.string().min(1, 'Database name is required'),
-});
+}).refine(
+  (data) => data.bucket || data.recordsBucket || data.versionsBucket || data.contentBucket || data.backupsBucket,
+  { message: 'At least one bucket configuration is required' }
+);
 
 // Tenant database schema
 export const TenantDatabaseSchema = z.object({
   tenantId: z.string().min(1, 'Tenant ID is required'),
   dbConnRef: z.string().min(1, 'Database connection reference is required'),
   spaceConnRef: z.string().min(1, 'Spaces connection reference is required'),
-  bucket: z.string().min(1, 'Bucket name is required'),
+  bucket: z.string().min(1).optional(), // Legacy single bucket
+  recordsBucket: z.string().min(1).optional(),
+  versionsBucket: z.string().min(1).optional(),
+  contentBucket: z.string().min(1).optional(),
+  backupsBucket: z.string().min(1).optional(),
   dbName: z.string().min(1, 'Database name is required'),
-});
+}).refine(
+  (data) => data.bucket || data.recordsBucket || data.versionsBucket || data.contentBucket || data.backupsBucket,
+  { message: 'At least one bucket configuration is required' }
+);
 
 // Runtime tenant database schema (includes analytics)
 export const RuntimeTenantDatabaseSchema = z.object({
   tenantId: z.string().min(1, 'Tenant ID is required'),
   dbConnRef: z.string().min(1, 'Database connection reference is required'),
   spaceConnRef: z.string().min(1, 'Spaces connection reference is required'),
-  bucket: z.string().min(1, 'Bucket name is required'),
+  bucket: z.string().min(1).optional(), // Legacy single bucket
+  recordsBucket: z.string().min(1).optional(),
+  versionsBucket: z.string().min(1).optional(),
+  contentBucket: z.string().min(1).optional(),
+  backupsBucket: z.string().min(1).optional(),
   dbName: z.string().min(1, 'Database name is required'),
   analyticsDbName: z.string().min(1, 'Analytics database name is required'),
-});
+}).refine(
+  (data) => data.bucket || data.recordsBucket || data.versionsBucket || data.contentBucket || data.backupsBucket,
+  { message: 'At least one bucket configuration is required' }
+);
 
-// Logs database schema
+// Logs database schema (S3 is now optional for logs)
 export const LogsDatabaseSchema = z.object({
   dbConnRef: z.string().min(1, 'Database connection reference is required'),
-  spaceConnRef: z.string().min(1, 'Spaces connection reference is required'),
-  bucket: z.string().min(1, 'Bucket name is required'),
+  spaceConnRef: z.string().min(1).optional(), // Optional - enables S3 storage
+  bucket: z.string().min(1).optional(), // Legacy single bucket
+  recordsBucket: z.string().min(1).optional(), // For log records
+  contentBucket: z.string().min(1).optional(), // For log attachments
   dbName: z.string().min(1, 'Database name is required'),
 });
 
@@ -170,6 +222,13 @@ export const CountersRulesSchema = z.object({
   rules: z.array(CounterRuleSchema).optional(),
 }).default({});
 
+// S3 offload configuration schema
+export const S3OffloadConfigSchema = z.object({
+  enabled: z.boolean(),
+  olderThan: z.number().int().positive('olderThan must be a positive number of days').optional().default(30),
+  archiveBucket: z.string().min(1).optional(),
+});
+
 // Collection map schema
 export const CollectionMapSchema = z.object({
   indexedProps: z.array(z.string().min(1, 'Indexed property name cannot be empty')),
@@ -181,6 +240,7 @@ export const CollectionMapSchema = z.object({
   validation: z.object({
     requiredIndexed: z.array(z.string().min(1, 'Required indexed property name cannot be empty')).optional(),
   }).optional(),
+  s3Offload: S3OffloadConfigSchema.optional(), // NEW: S3 offload configuration
 });
 
 // Logical delete configuration schema

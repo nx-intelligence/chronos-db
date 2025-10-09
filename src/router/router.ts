@@ -23,6 +23,31 @@ import type { StorageAdapter } from '../storage/interface.js';
 import { logger } from '../utils/logger.js';
 
 // ============================================================================
+// Helper Functions for Multi-Bucket Support
+// ============================================================================
+
+/**
+ * Resolve bucket name with backward compatibility
+ * Tries new bucket fields first, falls back to legacy bucket field
+ */
+function resolveBucket(
+  db: { bucket?: string; recordsBucket?: string; versionsBucket?: string; contentBucket?: string; backupsBucket?: string },
+  type: 'records' | 'versions' | 'content' | 'backups' = 'records'
+): string {
+  // Try new bucket fields first
+  if (type === 'records' && db.recordsBucket) return db.recordsBucket;
+  if (type === 'versions' && db.versionsBucket) return db.versionsBucket;
+  if (type === 'content' && db.contentBucket) return db.contentBucket;
+  if (type === 'backups' && db.backupsBucket) return db.backupsBucket;
+  
+  // Fall back to legacy bucket field
+  if (db.bucket) return db.bucket;
+  
+  // If no bucket is configured, throw error
+  throw new Error(`No bucket configured for type '${type}'. Please configure either '${type}Bucket' or 'bucket' (legacy).`);
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -453,17 +478,17 @@ export class BridgeRouter {
         
         if (ctx.tier === 'generic') {
           spacesConn = this.findSpacesConnection(this.databases.metadata.genericDatabase.spaceConnRef);
-          bucket = this.databases.metadata.genericDatabase.bucket;
+          bucket = resolveBucket(this.databases.metadata.genericDatabase);
         } else if (ctx.tier === 'domain' && ctx.domain) {
           const domainDb = this.databases.metadata.domainsDatabases.find(db => db.domain === ctx.domain);
           if (!domainDb) throw new Error(`Domain '${ctx.domain}' not found in metadata databases`);
           spacesConn = this.findSpacesConnection(domainDb.spaceConnRef);
-          bucket = domainDb.bucket;
+          bucket = resolveBucket(domainDb);
         } else if (ctx.tier === 'tenant' && ctx.tenantId) {
           const tenantDb = this.databases.metadata.tenantDatabases.find(db => db.tenantId === ctx.tenantId);
           if (!tenantDb) throw new Error(`Tenant '${ctx.tenantId}' not found in metadata databases`);
           spacesConn = this.findSpacesConnection(tenantDb.spaceConnRef);
-          bucket = tenantDb.bucket;
+          bucket = resolveBucket(tenantDb);
         }
         break;
         
@@ -472,17 +497,17 @@ export class BridgeRouter {
         
         if (ctx.tier === 'generic') {
           spacesConn = this.findSpacesConnection(this.databases.knowledge.genericDatabase.spaceConnRef);
-          bucket = this.databases.knowledge.genericDatabase.bucket;
+          bucket = resolveBucket(this.databases.knowledge.genericDatabase);
         } else if (ctx.tier === 'domain' && ctx.domain) {
           const domainDb = this.databases.knowledge.domainsDatabases.find(db => db.domain === ctx.domain);
           if (!domainDb) throw new Error(`Domain '${ctx.domain}' not found in knowledge databases`);
           spacesConn = this.findSpacesConnection(domainDb.spaceConnRef);
-          bucket = domainDb.bucket;
+          bucket = resolveBucket(domainDb);
         } else if (ctx.tier === 'tenant' && ctx.tenantId) {
           const tenantDb = this.databases.knowledge.tenantDatabases.find(db => db.tenantId === ctx.tenantId);
           if (!tenantDb) throw new Error(`Tenant '${ctx.tenantId}' not found in knowledge databases`);
           spacesConn = this.findSpacesConnection(tenantDb.spaceConnRef);
-          bucket = tenantDb.bucket;
+          bucket = resolveBucket(tenantDb);
         }
         break;
         
@@ -492,14 +517,17 @@ export class BridgeRouter {
         const runtimeTenantDb = this.databases.runtime.tenantDatabases.find(db => db.tenantId === ctx.tenantId);
         if (!runtimeTenantDb) throw new Error(`Tenant '${ctx.tenantId}' not found in runtime databases`);
         spacesConn = this.findSpacesConnection(runtimeTenantDb.spaceConnRef);
-        bucket = runtimeTenantDb.bucket;
+        bucket = resolveBucket(runtimeTenantDb);
         break;
         
       case 'logs':
         if (!this.databases.logs) throw new Error('Logs database not configured');
         
-        spacesConn = this.findSpacesConnection(this.databases.logs.spaceConnRef);
-        bucket = this.databases.logs.bucket;
+        // Logs database S3 is now optional
+        if (this.databases.logs.spaceConnRef) {
+          spacesConn = this.findSpacesConnection(this.databases.logs.spaceConnRef);
+          bucket = resolveBucket(this.databases.logs);
+        }
         break;
     }
     
@@ -602,18 +630,18 @@ export class BridgeRouter {
       case 'metadata':
         if (ctx.tier === 'generic') {
           spacesConn = this.findSpacesConnection(this.databases.metadata!.genericDatabase.spaceConnRef);
-          bucket = this.databases.metadata!.genericDatabase.bucket;
+          bucket = resolveBucket(this.databases.metadata!.genericDatabase);
         } else if (ctx.tier === 'domain' && ctx.domain) {
           const domainDb = this.databases.metadata!.domainsDatabases.find(db => db.domain === ctx.domain);
           if (domainDb) {
             spacesConn = this.findSpacesConnection(domainDb.spaceConnRef);
-            bucket = domainDb.bucket;
+            bucket = resolveBucket(domainDb);
           }
         } else if (ctx.tier === 'tenant' && ctx.tenantId) {
           const tenantDb = this.databases.metadata!.tenantDatabases.find(db => db.tenantId === ctx.tenantId);
           if (tenantDb) {
             spacesConn = this.findSpacesConnection(tenantDb.spaceConnRef);
-            bucket = tenantDb.bucket;
+            bucket = resolveBucket(tenantDb);
           }
         }
         break;
@@ -621,18 +649,18 @@ export class BridgeRouter {
       case 'knowledge':
         if (ctx.tier === 'generic') {
           spacesConn = this.findSpacesConnection(this.databases.knowledge!.genericDatabase.spaceConnRef);
-          bucket = this.databases.knowledge!.genericDatabase.bucket;
+          bucket = resolveBucket(this.databases.knowledge!.genericDatabase);
         } else if (ctx.tier === 'domain' && ctx.domain) {
           const domainDb = this.databases.knowledge!.domainsDatabases.find(db => db.domain === ctx.domain);
           if (domainDb) {
             spacesConn = this.findSpacesConnection(domainDb.spaceConnRef);
-            bucket = domainDb.bucket;
+            bucket = resolveBucket(domainDb);
           }
         } else if (ctx.tier === 'tenant' && ctx.tenantId) {
           const tenantDb = this.databases.knowledge!.tenantDatabases.find(db => db.tenantId === ctx.tenantId);
           if (tenantDb) {
             spacesConn = this.findSpacesConnection(tenantDb.spaceConnRef);
-            bucket = tenantDb.bucket;
+            bucket = resolveBucket(tenantDb);
           }
         }
         break;
@@ -642,14 +670,16 @@ export class BridgeRouter {
           const runtimeTenantDb = this.databases.runtime!.tenantDatabases.find(db => db.tenantId === ctx.tenantId);
           if (runtimeTenantDb) {
             spacesConn = this.findSpacesConnection(runtimeTenantDb.spaceConnRef);
-            bucket = runtimeTenantDb.bucket;
+            bucket = resolveBucket(runtimeTenantDb);
           }
         }
         break;
         
       case 'logs':
-        spacesConn = this.findSpacesConnection(this.databases.logs!.spaceConnRef);
-        bucket = this.databases.logs!.bucket;
+        if (this.databases.logs!.spaceConnRef) {
+          spacesConn = this.findSpacesConnection(this.databases.logs!.spaceConnRef);
+          bucket = resolveBucket(this.databases.logs!);
+        }
         break;
     }
     

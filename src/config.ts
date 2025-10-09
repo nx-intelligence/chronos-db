@@ -25,6 +25,34 @@ export interface DbConnection {
 }
 
 /**
+ * Multi-bucket configuration for different data types
+ */
+export interface BucketConfiguration {
+  /** Bucket for current/active records */
+  records?: string;
+  /** Bucket for backup/archived data */
+  backups?: string;
+  /** Bucket for binary content (files, blobs) */
+  content?: string;
+  /** Bucket for version history */
+  versions?: string;
+}
+
+/**
+ * Folder prefix configuration for storage organization
+ */
+export interface FolderPrefixes {
+  /** Folder prefix for records (default: 'records') */
+  records?: string;
+  /** Folder prefix for backups (default: 'backups') */
+  backups?: string;
+  /** Folder prefix for content (default: 'content') */
+  content?: string;
+  /** Folder prefix for versions (default: 'versions') */
+  versions?: string;
+}
+
+/**
  * S3-compatible storage connection configuration - define once, reference everywhere
  */
 export interface SpacesConnection {
@@ -38,6 +66,15 @@ export interface SpacesConnection {
   secretKey: string;
   /** Force path style (for MinIO) */
   forcePathStyle?: boolean;
+  
+  /** @deprecated Use buckets instead. Single bucket for all data (legacy) */
+  bucket?: string;
+  
+  /** Multi-bucket configuration (recommended) */
+  buckets?: BucketConfiguration;
+  
+  /** Folder prefixes for storage organization */
+  folderPrefixes?: FolderPrefixes;
 }
 
 /**
@@ -48,8 +85,19 @@ export interface GenericDatabase {
   dbConnRef: string;
   /** S3 spaces connection reference */
   spaceConnRef: string;
-  /** S3 bucket name */
-  bucket: string;
+  
+  /** @deprecated Use recordsBucket, versionsBucket, etc. instead. Single bucket for all data (legacy) */
+  bucket?: string;
+  
+  /** Bucket for current/active records */
+  recordsBucket?: string;
+  /** Bucket for version history */
+  versionsBucket?: string;
+  /** Bucket for binary content */
+  contentBucket?: string;
+  /** Bucket for backups/snapshots */
+  backupsBucket?: string;
+  
   /** MongoDB database name */
   dbName: string;
 }
@@ -64,8 +112,19 @@ export interface DomainDatabase {
   dbConnRef: string;
   /** S3 spaces connection reference */
   spaceConnRef: string;
-  /** S3 bucket name */
-  bucket: string;
+  
+  /** @deprecated Use recordsBucket, versionsBucket, etc. instead. Single bucket for all data (legacy) */
+  bucket?: string;
+  
+  /** Bucket for current/active records */
+  recordsBucket?: string;
+  /** Bucket for version history */
+  versionsBucket?: string;
+  /** Bucket for binary content */
+  contentBucket?: string;
+  /** Bucket for backups/snapshots */
+  backupsBucket?: string;
+  
   /** MongoDB database name */
   dbName: string;
 }
@@ -80,8 +139,19 @@ export interface TenantDatabase {
   dbConnRef: string;
   /** S3 spaces connection reference */
   spaceConnRef: string;
-  /** S3 bucket name */
-  bucket: string;
+  
+  /** @deprecated Use recordsBucket, versionsBucket, etc. instead. Single bucket for all data (legacy) */
+  bucket?: string;
+  
+  /** Bucket for current/active records */
+  recordsBucket?: string;
+  /** Bucket for version history */
+  versionsBucket?: string;
+  /** Bucket for binary content */
+  contentBucket?: string;
+  /** Bucket for backups/snapshots */
+  backupsBucket?: string;
+  
   /** MongoDB database name */
   dbName: string;
 }
@@ -96,8 +166,19 @@ export interface RuntimeTenantDatabase {
   dbConnRef: string;
   /** S3 spaces connection reference */
   spaceConnRef: string;
-  /** S3 bucket name */
-  bucket: string;
+  
+  /** @deprecated Use recordsBucket, versionsBucket, etc. instead. Single bucket for all data (legacy) */
+  bucket?: string;
+  
+  /** Bucket for current/active records */
+  recordsBucket?: string;
+  /** Bucket for version history */
+  versionsBucket?: string;
+  /** Bucket for binary content */
+  contentBucket?: string;
+  /** Bucket for backups/snapshots */
+  backupsBucket?: string;
+  
   /** MongoDB database name */
   dbName: string;
   /** Analytics database name */
@@ -106,14 +187,23 @@ export interface RuntimeTenantDatabase {
 
 /**
  * Logs database configuration (simple flat structure)
+ * Now supports S3/Spaces storage for log offloading and archival
  */
 export interface LogsDatabase {
   /** MongoDB connection reference */
   dbConnRef: string;
-  /** S3 spaces connection reference */
-  spaceConnRef: string;
-  /** S3 bucket name */
-  bucket: string;
+  
+  /** S3 spaces connection reference (optional - enables S3 storage for logs) */
+  spaceConnRef?: string;
+  
+  /** @deprecated Use recordsBucket and contentBucket instead. Single bucket for all data (legacy) */
+  bucket?: string;
+  
+  /** Bucket for log records (optional - only if spaceConnRef is set) */
+  recordsBucket?: string;
+  /** Bucket for log attachments/content (optional - only if spaceConnRef is set) */
+  contentBucket?: string;
+  
   /** MongoDB database name */
   dbName: string;
 }
@@ -185,6 +275,18 @@ export interface RollupConfig {
 }
 
 /**
+ * S3 offload configuration for automatic archival of old records
+ */
+export interface S3OffloadConfig {
+  /** Whether S3 offload is enabled for this collection */
+  enabled: boolean;
+  /** Number of days before offloading records to S3 (default: 30) */
+  olderThan?: number;
+  /** Optional archive bucket (overrides default bucket) */
+  archiveBucket?: string;
+}
+
+/**
  * Collection map configuration
  */
 export interface CollectionMap {
@@ -204,6 +306,8 @@ export interface CollectionMap {
     /** Required indexed properties */
     requiredIndexed?: string[];
   };
+  /** S3 offload configuration for automatic archival */
+  s3Offload?: S3OffloadConfig;
 }
 
 /**
