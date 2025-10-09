@@ -580,7 +580,7 @@ export function initXronox(
   }
   
   logger.info('Initializing xronox', {
-    version: '2.8.0',
+    version: '2.9.0',
     databasesCount: Object.keys(finalConfig.databases).length,
     hasSpacesConnections: !!finalConfig.spacesConnections && Object.keys(finalConfig.spacesConnections).length > 0,
     localStorageEnabled: finalConfig.localStorage?.enabled,
@@ -1160,6 +1160,20 @@ export {
   XronoxConfigValidationError,
   XronoxConfigStructureError,
 } from './config/errors.js';
+
+// Identity Types (Standard attribution for ecosystem)
+export type { Identity, IdentityType } from './types/identity.js';
+export {
+  createIdentity,
+  createUserIdentity,
+  createAgentIdentity,
+  createSystemIdentity,
+  createAPIIdentity,
+  validateIdentity,
+  isIdentity,
+  identityToString,
+  parseIdentityString,
+} from './types/identity.js';
 
 // Backwards compatibility alias
 /**
