@@ -1,4 +1,4 @@
-# Xronox v2.4 🚀
+# Xronox v3.0 🚀
 
 > **The Essential Persistence Layer for Big Data & SaaS Applications**  
 > **Enterprise-Grade MongoDB + S3/Azure with Embedded Multi-Tenancy**
@@ -8,6 +8,44 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)]()
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green)]()
 [![License](https://img.shields.io/badge/license-MIT-blue)]()
+[![Version](https://img.shields.io/badge/version-3.0.0-purple)]()
+
+---
+
+## 🆕 **What's New in v3.0**
+
+### **🆔 Standard Identity System** (CR-007)
+Track **WHO** created or modified data with a consistent identity interface across your entire ecosystem:
+- **Universal Identity Interface**: Standard `Identity` type for users, agents, systems, APIs, services, jobs
+- **Attribution & Audit Trails**: GDPR, SOX, HIPAA compliant tracking
+- **Helper Functions**: `createUserIdentity`, `createAgentIdentity`, `createSystemIdentity`, etc.
+- **Serialization**: Convert identities to/from strings for logging and storage
+
+### **🎯 Field Projection & Hidden Fields** (CR-009)
+Control what data is returned in queries, just like hidden files in your OS:
+- **Hidden Fields**: Mark fields as hidden by default (e.g., `_metadata`, `_internal`)
+- **Named Projections**: Define reusable projections (`minimal`, `default`, `withMetadata`)
+- **Query Options**: `includeHidden` and `projectionSpec` for dynamic control
+- **Security & Performance**: Reduce payload size, prevent accidental data exposure
+
+### **🌐 Dynamic Tenant Resolution** (v2.8)
+Automatically discover tenant databases at runtime without configuration restarts:
+- **Zero-Config Tenants**: Add new tenants without redeployment
+- **Database Discovery**: Auto-detect tenant databases based on naming patterns
+- **Caching**: Intelligent caching with TTL for performance
+
+### **📦 Multi-Bucket Storage** (v2.5)
+Optimize costs and organization with separate buckets for different data types:
+- **Separate Buckets**: `records`, `versions`, `content`, `backups` in different S3 buckets
+- **Cost Optimization**: Use different storage classes per bucket type
+- **Access Control**: Fine-grained permissions per bucket
+
+### **⚙️ Config File Auto-Loading** (v2.7)
+Zero-code configuration with automatic discovery and ENV variable resolution:
+- **Auto-Discovery**: Loads `xronox.config.json` or `.xronox.json` from project root
+- **ENV Tokens**: `ENV.VAR_NAME` placeholders resolved at runtime
+- **Strict Validation**: Hard errors if ENV vars are missing
+- **Secret Masking**: Automatic masking of sensitive values in logs
 
 ---
 
@@ -619,12 +657,80 @@ devShadow: {
 ### **Installation**
 
 ```bash
-npm install xronox@^2.6.0
+npm install xronox@^3.0.0
 ```
 
 **Note:** The package was previously named `chronos-db`. Starting from v2.4.0, it's published as `xronox`.
 
-### **🎯 Quick Start with Config Builder** (NEW in v2.6.0!)
+### **🎯 Quick Start with Config File** ⭐ RECOMMENDED (v2.7+)
+
+The simplest way to get started - zero code configuration:
+
+**1. Create `xronox.config.json` in your project root:**
+
+```json
+{
+  "xronox": {
+    "dbConnections": {
+      "mongo-primary": {
+        "mongoUri": "ENV.MONGO_URI"
+      }
+    },
+    "spacesConnections": {
+      "s3-primary": {
+        "endpoint": "ENV.S3_ENDPOINT",
+        "region": "ENV.S3_REGION",
+        "accessKey": "ENV.S3_ACCESS_KEY",
+        "secretKey": "ENV.S3_SECRET_KEY"
+      }
+    },
+    "databases": {
+      "runtime": {
+        "tenantDatabases": [
+          {
+            "tenantId": "default",
+            "dbConnRef": "mongo-primary",
+            "spaceConnRef": "s3-primary",
+            "recordsBucket": "ENV.S3_BUCKET",
+            "dbName": "my_app_runtime"
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+**2. Set environment variables:**
+
+```bash
+export MONGO_URI="mongodb://localhost:27017"
+export S3_ENDPOINT="https://s3.amazonaws.com"
+export S3_REGION="us-east-1"
+export S3_ACCESS_KEY="your-access-key"
+export S3_SECRET_KEY="your-secret-key"
+export S3_BUCKET="my-app-bucket"
+```
+
+**3. Initialize (auto-loads config):**
+
+```typescript
+import { initXronox } from 'xronox';
+
+// Auto-discovers and loads xronox.config.json
+const xronox = await initXronox();
+
+const ops = xronox.with({
+  databaseType: 'runtime',
+  tier: 'tenant',
+  tenantId: 'default',
+  collection: 'users'
+});
+
+await ops.create({ name: 'Alice', email: 'alice@example.com' });
+```
+
+### **🎯 Quick Start with Config Builder**
 
 The easiest way to get started:
 
@@ -650,7 +756,7 @@ const xronox = initXronox(config);
 import { createDevConfig, initXronox } from 'xronox';
 
 const config = createDevConfig({
-  mongoUri: 'mongodb://localhost:27017',
+    mongoUri: 'mongodb://localhost:27017',
   basePath: './xronox-data'
 });
 
@@ -1305,6 +1411,316 @@ await ops.restoreCollection({ cv: 100 });
 // or by time
 await ops.restoreCollection({ at: '2024-01-01T00:00:00Z' });
 ```
+
+### **8. Identity & Attribution System** ⭐ NEW in v3.0
+
+Track **WHO** created or modified data with a standardized identity interface across your entire ecosystem.
+
+#### **Why Identity Matters**
+- **Attribution**: Know who created each record
+- **Audit Trails**: Compliance requirements (GDPR, SOX, HIPAA)
+- **Access Control**: Filter data by creator
+- **Collaboration**: Multiple users per tenant
+- **AI Agents**: Track which agent learned/created data
+
+#### **Standard Identity Interface**
+
+```typescript
+import { Identity, createUserIdentity, createAgentIdentity, createSystemIdentity } from 'xronox';
+
+// User identity
+const userIdentity: Identity = createUserIdentity('user-123', 'John Doe', {
+  email: 'john@example.com',
+  role: 'admin',
+  department: 'engineering'
+});
+
+// AI Agent identity
+const agentIdentity: Identity = createAgentIdentity('research-agent-v2', 'Research Agent', {
+  version: '2.0.0',
+  model: 'gpt-4',
+  provider: 'openai'
+});
+
+// System identity
+const systemIdentity: Identity = createSystemIdentity('background-processor', 'Background Processor', {
+  hostname: 'worker-01',
+  pid: 12345
+});
+
+// API/Service identity
+const apiIdentity: Identity = {
+  type: 'api',
+  identifier: 'stripe-integration',
+  name: 'Stripe Payment Integration',
+  metadata: { version: 'v1', environment: 'production' }
+};
+```
+
+#### **Using Identities in Operations**
+
+```typescript
+// Create record with identity attribution
+const result = await ops.create(
+  { topic: 'quantum-computing', content: '...' },
+  userIdentity,  // WHO created this
+  'research'     // WHY created (reason)
+);
+
+// Update with agent identity
+await ops.update(
+  id,
+  { confidence: 0.95 },
+  expectedOv,
+  agentIdentity,  // WHO updated this
+  'ml-validation' // WHY updated
+);
+
+// Enrich with system identity
+await ops.enrich(
+  id,
+  { processed: true, processedAt: new Date() },
+  {
+    identity: systemIdentity,  // WHO enriched this
+    reason: 'automated-processing'
+  }
+);
+```
+
+#### **Identity Types**
+
+```typescript
+type IdentityType = 
+  | 'user'      // Human user
+  | 'agent'     // AI agent / automated system
+  | 'system'    // Internal system process
+  | 'api'       // External API integration
+  | 'service'   // Microservice
+  | 'job'       // Background job / worker
+  | 'cron'      // Scheduled task
+  | 'webhook'   // Webhook trigger
+  | string;     // Custom types allowed
+```
+
+#### **Helper Functions**
+
+```typescript
+import {
+  createIdentity,
+  createUserIdentity,
+  createAgentIdentity,
+  createSystemIdentity,
+  createAPIIdentity,
+  validateIdentity,
+  isIdentity,
+  identityToString,
+  parseIdentityString
+} from 'xronox';
+
+// Create identities
+const identity = createIdentity('user', 'user-123', 'John Doe');
+
+// Validate identity
+validateIdentity(identity);  // Throws if invalid
+isIdentity(obj);             // Returns boolean
+
+// Serialize for logging
+const str = identityToString(identity);
+// Returns: "user:user-123 (John Doe)"
+
+// Parse from string
+const parsed = parseIdentityString("user:user-123 (John Doe)");
+// Returns: { type: 'user', identifier: 'user-123', name: 'John Doe' }
+```
+
+#### **Querying by Identity**
+
+```typescript
+// Find all records created by a specific user
+const userRecords = await ops.query({
+  meta: { '_system.creator.identifier': 'user-123' }
+});
+
+// Find all records updated by an agent
+const agentUpdates = await ops.query({
+  meta: { '_system.updater.type': 'agent' }
+});
+
+// Find records created by API integrations
+const apiRecords = await ops.query({
+  meta: { '_system.creator.type': 'api' }
+});
+```
+
+---
+
+### **9. Field Projection & Hidden Fields** ⭐ NEW in v3.0
+
+Control what data is returned in queries, just like hidden files in your operating system.
+
+#### **Why Projection Matters**
+- **Cleaner Responses**: Hide metadata fields by default
+- **Performance**: Reduce payload size (less data transfer)
+- **Security**: Prevent accidental exposure of internal fields
+- **Flexibility**: Show hidden fields when needed (admin/debug)
+- **DRY Principle**: Define once in config, use everywhere
+
+#### **Configure Hidden Fields**
+
+```typescript
+collectionMaps: {
+  knowledge_items: {
+    indexedProps: ['topic', 'state', 'confidence'],
+    
+    // Fields hidden by default (like hidden files in OS)
+    hiddenFields: ['_metadata', '_internal'],
+    
+    // Named projections (reusable presets)
+    projection: {
+      default: {
+        include: '*',
+        exclude: ['_metadata', '_internal']  // Hide by default
+      },
+      minimal: {
+        include: ['id', 'topic', 'content'],  // Only essential fields
+        exclude: []
+      },
+      withMetadata: {
+        include: '*',   // Include everything (even hidden)
+        exclude: []
+      },
+      admin: {
+        include: '*',   // Admin view with all fields
+        exclude: []
+      }
+    }
+  }
+}
+```
+
+#### **Using Projections in Queries**
+
+```typescript
+// Default behavior - hidden fields excluded
+const item = await ops.getLatest(id);
+// Returns: { topic, content, confidence, sources, ... }
+// Does NOT include: _metadata, _internal ✅
+
+// Explicitly include hidden fields (like "Show hidden files" in Windows)
+const itemWithMetadata = await ops.getLatest(id, {
+  includeHidden: true  
+});
+// Returns: { topic, content, _metadata, _internal, ... }
+// INCLUDES hidden fields ✅
+
+// Use named projection
+const minimal = await ops.getLatest(id, {
+  projectionSpec: 'minimal'
+});
+// Returns: { id, topic, content }  // Only specified fields ✅
+
+// Use custom projection
+const custom = await ops.getLatest(id, {
+  projectionSpec: {
+    include: ['topic', 'confidence'],
+    exclude: []
+  }
+});
+// Returns: { topic, confidence }  ✅
+```
+
+#### **Projections in Query Operations**
+
+```typescript
+// Query without metadata (default)
+const items = await ops.query({
+  meta: { state: 'known' }
+});
+// All items returned without _metadata ✅
+
+// Query with metadata (for admin panel)
+const adminItems = await ops.query({
+  meta: { state: 'known' }
+}, {
+  includeHidden: true  // Include _metadata for audit
+});
+// All items with _metadata ✅
+
+// Query with named projection
+const minimalItems = await ops.query({
+  meta: { state: 'known' }
+}, {
+  projectionSpec: 'minimal'
+});
+// All items with only minimal fields ✅
+```
+
+#### **Real-World Example: Knowledge Graph with Metadata**
+
+```typescript
+// Configuration
+collectionMaps: {
+  knowledge_items: {
+    indexedProps: ['topic', 'agentId', 'state', 'confidence'],
+    
+    // Hide internal metadata by default
+    hiddenFields: ['_metadata'],
+    
+    projection: {
+      // Application use (clean response)
+      default: {
+        include: '*',
+        exclude: ['_metadata']
+      },
+      // Admin/Debug view (with metadata)
+      withMetadata: {
+        include: '*'
+      }
+    }
+  }
+}
+
+// Application code - clean response
+const knowledge = await knowledgeOps.getLatest(id);
+// Returns:
+// {
+//   topic: 'quantum-computing',
+//   content: { ... },
+//   confidence: 0.9,
+//   sources: [...]
+// }
+// No _metadata cluttering the response ✅
+
+// Admin/Debug - full context
+const knowledgeWithContext = await knowledgeOps.getLatest(id, {
+  includeHidden: true
+});
+// Returns:
+// {
+//   topic: 'quantum-computing',
+//   content: { ... },
+//   confidence: 0.9,
+//   sources: [...],
+//   _metadata: {              // ← Now visible
+//     agentId: 'agent-123',
+//     jobId: 'job-456',
+//     identity: { ... },
+//     context: [...],
+//     learnedAt: '2025-01-09T...'
+//   }
+// }
+```
+
+#### **Benefits of Field Projection**
+
+| Without Projection | With Projection (Xronox v3.0) |
+|-------------------|------------------------------|
+| ❌ Metadata clutters responses | ✅ Clean responses by default |
+| ❌ Manual field stripping in code | ✅ Define once in config |
+| ❌ Inconsistent across frameworks | ✅ Standard behavior |
+| ❌ Larger payloads | ✅ Smaller payloads (better performance) |
+| ❌ Security risk (accidental exposure) | ✅ Security by default |
+| ❌ Duplicated logic everywhere | ✅ DRY principle |
 
 ---
 
