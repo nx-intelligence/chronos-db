@@ -1098,6 +1098,14 @@ export * from './read/merge.js';
 export * from './messaging/schemas.js';
 export * from './messaging/messagingApi.js';
 
+// Configuration Builder
+export { 
+  XronoxConfigBuilder, 
+  createDevConfig, 
+  createProductionConfig, 
+  createMinimalConfig 
+} from './config/builder.js';
+
 // Backwards compatibility alias
 /**
  * @deprecated Use initXronox instead. Kept for backwards compatibility.

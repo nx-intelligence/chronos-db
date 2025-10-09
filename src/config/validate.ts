@@ -89,21 +89,19 @@ export const TenantDatabaseSchema = z.object({
 );
 
 // Runtime tenant database schema (includes analytics)
+// Runtime database is for TRANSACTIONAL data - S3 is optional for backward compat but HIGHLY RECOMMENDED
 export const RuntimeTenantDatabaseSchema = z.object({
   tenantId: z.string().min(1, 'Tenant ID is required'),
   dbConnRef: z.string().min(1, 'Database connection reference is required'),
-  spaceConnRef: z.string().min(1, 'Spaces connection reference is required'),
+  spaceConnRef: z.string().min(1).optional(), // Optional for backward compatibility
   bucket: z.string().min(1).optional(), // Legacy single bucket
   recordsBucket: z.string().min(1).optional(),
-  versionsBucket: z.string().min(1).optional(),
+  versionsBucket: z.string().min(1).optional(), // CRITICAL for audit trails
   contentBucket: z.string().min(1).optional(),
   backupsBucket: z.string().min(1).optional(),
   dbName: z.string().min(1, 'Database name is required'),
   analyticsDbName: z.string().min(1, 'Analytics database name is required'),
-}).refine(
-  (data) => data.bucket || data.recordsBucket || data.versionsBucket || data.contentBucket || data.backupsBucket,
-  { message: 'At least one bucket configuration is required' }
-);
+});
 
 // Logs database schema (S3 is now optional for logs)
 export const LogsDatabaseSchema = z.object({
@@ -116,15 +114,29 @@ export const LogsDatabaseSchema = z.object({
 });
 
 // Messaging database schema (simple flat structure, like logs)
+// Messaging is relatively static (like metadata) - NO versioning needed
 export const MessagingDatabaseSchema = z.object({
   dbConnRef: z.string().min(1, 'Database connection reference is required'),
+  spaceConnRef: z.string().min(1).optional(), // Optional S3 support
+  bucket: z.string().min(1).optional(), // Legacy single bucket
+  recordsBucket: z.string().min(1).optional(), // Message records
+  contentBucket: z.string().min(1).optional(), // Large message payloads
+  backupsBucket: z.string().min(1).optional(), // Backups
+  // NO versionsBucket - messaging data is append-only/static
   dbName: z.string().min(1, 'Database name is required'),
   captureDeliveries: z.boolean().optional(),
 });
 
 // Identities database schema (simple flat structure, like logs)
+// Identities is relatively static (like metadata) - NO versioning needed
 export const IdentitiesDatabaseSchema = z.object({
   dbConnRef: z.string().min(1, 'Database connection reference is required'),
+  spaceConnRef: z.string().min(1).optional(), // Optional S3 support
+  bucket: z.string().min(1).optional(), // Legacy single bucket
+  recordsBucket: z.string().min(1).optional(), // Identity records
+  contentBucket: z.string().min(1).optional(), // Profile images, documents
+  backupsBucket: z.string().min(1).optional(), // Backups
+  // NO versionsBucket - identity data is relatively static
   dbName: z.string().min(1, 'Database name is required'),
 });
 

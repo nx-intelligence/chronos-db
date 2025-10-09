@@ -516,8 +516,12 @@ export class BridgeRouter {
         
         const runtimeTenantDb = this.databases.runtime.tenantDatabases.find(db => db.tenantId === ctx.tenantId);
         if (!runtimeTenantDb) throw new Error(`Tenant '${ctx.tenantId}' not found in runtime databases`);
-        spacesConn = this.findSpacesConnection(runtimeTenantDb.spaceConnRef);
-        bucket = resolveBucket(runtimeTenantDb);
+        
+        // Runtime S3 is optional for backward compatibility (but HIGHLY RECOMMENDED for production)
+        if (runtimeTenantDb.spaceConnRef) {
+          spacesConn = this.findSpacesConnection(runtimeTenantDb.spaceConnRef);
+          bucket = resolveBucket(runtimeTenantDb);
+        }
         break;
         
       case 'logs':
@@ -527,6 +531,26 @@ export class BridgeRouter {
         if (this.databases.logs.spaceConnRef) {
           spacesConn = this.findSpacesConnection(this.databases.logs.spaceConnRef);
           bucket = resolveBucket(this.databases.logs);
+        }
+        break;
+        
+      case 'messaging':
+        if (!this.databases.messaging) throw new Error('Messaging database not configured');
+        
+        // Messaging database S3 is optional (like logs)
+        if (this.databases.messaging.spaceConnRef) {
+          spacesConn = this.findSpacesConnection(this.databases.messaging.spaceConnRef);
+          bucket = resolveBucket(this.databases.messaging);
+        }
+        break;
+        
+      case 'identities':
+        if (!this.databases.identities) throw new Error('Identities database not configured');
+        
+        // Identities database S3 is optional (like logs)
+        if (this.databases.identities.spaceConnRef) {
+          spacesConn = this.findSpacesConnection(this.databases.identities.spaceConnRef);
+          bucket = resolveBucket(this.databases.identities);
         }
         break;
     }
@@ -668,7 +692,7 @@ export class BridgeRouter {
       case 'runtime':
         if (ctx.tenantId) {
           const runtimeTenantDb = this.databases.runtime!.tenantDatabases.find(db => db.tenantId === ctx.tenantId);
-          if (runtimeTenantDb) {
+          if (runtimeTenantDb && runtimeTenantDb.spaceConnRef) {
             spacesConn = this.findSpacesConnection(runtimeTenantDb.spaceConnRef);
             bucket = resolveBucket(runtimeTenantDb);
           }
@@ -679,6 +703,20 @@ export class BridgeRouter {
         if (this.databases.logs!.spaceConnRef) {
           spacesConn = this.findSpacesConnection(this.databases.logs!.spaceConnRef);
           bucket = resolveBucket(this.databases.logs!);
+        }
+        break;
+        
+      case 'messaging':
+        if (this.databases.messaging && this.databases.messaging.spaceConnRef) {
+          spacesConn = this.findSpacesConnection(this.databases.messaging.spaceConnRef);
+          bucket = resolveBucket(this.databases.messaging);
+        }
+        break;
+        
+      case 'identities':
+        if (this.databases.identities && this.databases.identities.spaceConnRef) {
+          spacesConn = this.findSpacesConnection(this.databases.identities.spaceConnRef);
+          bucket = resolveBucket(this.databases.identities);
         }
         break;
     }

@@ -158,23 +158,34 @@ export interface TenantDatabase {
 
 /**
  * Runtime tenant database configuration (includes analytics)
+ * 
+ * CRITICAL: Runtime database is for TRANSACTIONAL user data and REQUIRES:
+ * - S3 storage for scalability (hot MongoDB + warm S3)
+ * - Version history (versionsBucket) for:
+ *   - Audit trails (who did what when)
+ *   - Compliance (GDPR, SOX, HIPAA)
+ *   - Rollback capabilities
+ *   - Time-travel queries
+ * 
+ * Unlike Knowledge/Metadata (static), Runtime data is high-velocity and transactional.
  */
 export interface RuntimeTenantDatabase {
   /** Tenant identifier */
   tenantId: string;
   /** MongoDB connection reference */
   dbConnRef: string;
-  /** S3 spaces connection reference */
-  spaceConnRef: string;
+  
+  /** S3 spaces connection reference (optional for backward compatibility, but HIGHLY RECOMMENDED for production) */
+  spaceConnRef?: string;
   
   /** @deprecated Use recordsBucket, versionsBucket, etc. instead. Single bucket for all data (legacy) */
   bucket?: string;
   
-  /** Bucket for current/active records */
+  /** Bucket for current/active records (RECOMMENDED) */
   recordsBucket?: string;
-  /** Bucket for version history */
+  /** Bucket for version history (CRITICAL for audit trails and compliance) */
   versionsBucket?: string;
-  /** Bucket for binary content */
+  /** Bucket for binary content (user uploads, attachments) */
   contentBucket?: string;
   /** Bucket for backups/snapshots */
   backupsBucket?: string;
@@ -210,11 +221,31 @@ export interface LogsDatabase {
 
 /**
  * Messaging database configuration (simple flat structure, like logs)
- * Simple MongoDB-only storage for Chronow integration (no versioning, no S3/Azure offload)
+ * 
+ * For Chronow integration: topic metadata, message records, DLQ
+ * Nature: Relatively static metadata (like Knowledge/Metadata)
+ * - NO versioning needed (topics/messages don't change, they accumulate)
+ * - S3 support for scalability (large message payloads)
+ * - Backups sufficient for disaster recovery
  */
 export interface MessagingDatabase {
   /** MongoDB connection reference */
   dbConnRef: string;
+  
+  /** S3 spaces connection reference (optional - enables S3 storage for messages) */
+  spaceConnRef?: string;
+  
+  /** @deprecated Use recordsBucket and contentBucket instead. Single bucket for all data (legacy) */
+  bucket?: string;
+  
+  /** Bucket for message records (optional - only if spaceConnRef is set) */
+  recordsBucket?: string;
+  /** Bucket for large message payloads/content (optional - only if spaceConnRef is set) */
+  contentBucket?: string;
+  /** Bucket for backups/snapshots (optional - only if spaceConnRef is set) */
+  backupsBucket?: string;
+  // NO versionsBucket - messaging data is append-only/static
+  
   /** MongoDB database name */
   dbName: string;
   /** Capture delivery attempts (default: false to save storage) */
@@ -223,11 +254,34 @@ export interface MessagingDatabase {
 
 /**
  * Identities database configuration (simple flat structure, like logs)
- * For users, accounts, authentication, permissions, roles (no versioning, no S3/Azure offload)
+ * 
+ * For users, accounts, authentication, permissions, roles
+ * Nature: Relatively static (like Knowledge/Metadata)
+ * - NO versioning needed (identity changes are managed, not transactional)
+ * - S3 support for scalability (profile images, documents)
+ * - Backups sufficient for disaster recovery
+ * 
+ * Note: If you need audit trails for identity changes (e.g., "who changed this user's role"),
+ * consider storing those events in the Runtime database instead.
  */
 export interface IdentitiesDatabase {
   /** MongoDB connection reference */
   dbConnRef: string;
+  
+  /** S3 spaces connection reference (optional - enables S3 storage for identity data) */
+  spaceConnRef?: string;
+  
+  /** @deprecated Use recordsBucket and contentBucket instead. Single bucket for all data (legacy) */
+  bucket?: string;
+  
+  /** Bucket for identity records (optional - only if spaceConnRef is set) */
+  recordsBucket?: string;
+  /** Bucket for identity content like profile images, documents (optional - only if spaceConnRef is set) */
+  contentBucket?: string;
+  /** Bucket for backups/snapshots (optional - only if spaceConnRef is set) */
+  backupsBucket?: string;
+  // NO versionsBucket - identity data is relatively static
+  
   /** MongoDB database name */
   dbName: string;
 }
