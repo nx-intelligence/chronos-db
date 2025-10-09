@@ -1,24 +1,24 @@
-import type { ChronosConfig } from '../config.js';
+import type { XronoxConfig } from '../config.js';
 
 /**
  * Global configuration storage for access throughout the application
  */
-let globalChronosConfig: ChronosConfig | null = null;
+let globalXronoxConfig: XronoxConfig | null = null;
 
 /**
  * Set the global configuration
  * @param config - Configuration to store globally
  */
-export function setGlobalConfig(config: ChronosConfig): void {
-  globalChronosConfig = config;
+export function setGlobalConfig(config: XronoxConfig): void {
+  globalXronoxConfig = config;
 }
 
 /**
  * Get the global configuration
  * @returns Current global configuration or null
  */
-export function getGlobalConfig(): ChronosConfig | null {
-  return globalChronosConfig;
+export function getGlobalConfig(): XronoxConfig | null {
+  return globalXronoxConfig;
 }
 
 /**
@@ -26,7 +26,7 @@ export function getGlobalConfig(): ChronosConfig | null {
  * @returns true if transactions are enabled
  */
 export function isTransactionEnabled(): boolean {
-  return globalChronosConfig?.transactions?.enabled === true;
+  return globalXronoxConfig?.transactions?.enabled === true;
 }
 
 /**
@@ -34,12 +34,12 @@ export function isTransactionEnabled(): boolean {
  * @returns Transaction configuration or default
  */
 export function getTransactionConfig(): { enabled?: boolean; autoDetect?: boolean } {
-  return globalChronosConfig?.transactions || { enabled: true, autoDetect: true };
+  return globalXronoxConfig?.transactions || { enabled: true, autoDetect: true };
 }
 
 /**
  * Clear the global configuration (useful for testing)
  */
 export function clearGlobalConfig(): void {
-  globalChronosConfig = null;
+  globalXronoxConfig = null;
 }

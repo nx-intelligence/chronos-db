@@ -318,7 +318,7 @@ spacesConnections: {
 #### **2. High-Throughput Operations**
 ```typescript
 // Optimized for millions of operations per day
-const chronos = initChronos({
+const xronox = initXronox({
   // ... configuration
   writeOptimization: {
     batchSize: 1000,           // Batch S3 operations
@@ -629,7 +629,7 @@ npm install xronox@^2.4.0
 ```typescript
 import { initChronos } from 'xronox';
 
-const chronos = initChronos({
+const xronox = initXronox({
   // Connection definitions (95% reuse as requested)
   dbConnections: {
     'mongo-primary': {
@@ -2905,7 +2905,7 @@ Then update your imports from `'chronos-db'` to `'xronox'`. The API is 100% comp
 ### **Q: Can I use xronox without S3?**
 **A:** Yes! Use `localStorage` for development/testing:
 ```typescript
-const chronos = initChronos({
+const xronox = initXronox({
   dbConnections: { 'local': { mongoUri: 'mongodb://localhost:27017' } },
   spacesConnections: {},
   databases: { /* your config */ },

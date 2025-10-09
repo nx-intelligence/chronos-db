@@ -1,6 +1,6 @@
 import { MongoClient } from 'mongodb';
 import { BridgeRouter } from '../router/router.js';
-import type { ChronosConfig, RouteContext } from '../config.js';
+import type { XronoxConfig, RouteContext } from '../config.js';
 
 // ============================================================================
 // Types
@@ -29,10 +29,10 @@ export interface BackendInfo {
 /**
  * Check health of all backends
  * @param router - Bridge router instance
- * @param config - Chronos configuration
+ * @param config - Xronox configuration
  * @returns Health report
  */
-export async function health(router: BridgeRouter, config: ChronosConfig): Promise<HealthReport> {
+export async function health(router: BridgeRouter, config: XronoxConfig): Promise<HealthReport> {
   const timestamp = new Date().toISOString();
   
   // Get all MongoDB URIs
@@ -125,9 +125,9 @@ export async function health(router: BridgeRouter, config: ChronosConfig): Promi
 /**
  * Shutdown all connections
  * @param router - Bridge router instance
- * @param config - Chronos configuration
+ * @param config - Xronox configuration
  */
-export async function shutdown(router: BridgeRouter, _config: ChronosConfig): Promise<void> {
+export async function shutdown(router: BridgeRouter, _config: XronoxConfig): Promise<void> {
   // Shutdown router (closes all MongoDB connections)
   await router.shutdown();
   

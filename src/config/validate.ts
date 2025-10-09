@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ChronosConfig } from '../config.js';
+import type { XronoxConfig } from '../config.js';
 
 // ============================================================================
 // Enhanced Validation Schemas
@@ -194,7 +194,7 @@ export const VersioningConfigSchema = z.object({
 });
 
 // Main configuration schema
-export const ChronosConfigSchema = z.object({
+export const XronoxConfigSchema = z.object({
   dbConnections: z.record(DbConnectionSchema),
   spacesConnections: z.record(SpacesConnectionSchema),
   databases: z.object({
@@ -304,14 +304,14 @@ export const ChronosConfigSchema = z.object({
 // ============================================================================
 
 /**
- * Validate Chronos configuration with enhanced error messages
+ * Validate Xronox configuration with enhanced error messages
  * @param cfg - Configuration to validate
  * @returns Validated configuration
  * @throws Error with redacted secrets if validation fails
  */
-export function validateConfig(cfg: unknown): ChronosConfig {
+export function validateConfig(cfg: unknown): XronoxConfig {
   try {
-    return ChronosConfigSchema.parse(cfg) as ChronosConfig;
+    return XronoxConfigSchema.parse(cfg) as XronoxConfig;
   } catch (error) {
     if (error instanceof z.ZodError) {
       const redactedError = redactSecrets(error);

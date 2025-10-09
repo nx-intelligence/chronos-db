@@ -1,4 +1,4 @@
-import { validateChronosConfig, validateTransactionConfig, type ChronosConfig, type RouteContext } from './config.js';
+import { validateXronoxConfig, validateTransactionConfig, type XronoxConfig, type RouteContext } from './config.js';
 import { setGlobalConfig } from './config/global.js';
 import { logger } from './utils/logger.js';
 import { BridgeRouter } from './router/router.js';
@@ -22,9 +22,9 @@ export type { FallbackResult } from './fallback/wrapper.js';
 // ============================================================================
 
 /**
- * Main interface for the Unified Data Manager
+ * Main interface for Xronox
  */
-export interface Chronos {
+export interface Xronox {
   /**
    * Route a request to determine which backend to use
    * @param ctx - Routing context
@@ -543,15 +543,15 @@ export interface PruneResult {
 // ============================================================================
 
 /**
- * Initialize the Unified Data Manager with the given configuration
+ * Initialize Xronox with the given configuration
  * @param config - Configuration object
- * @returns Chronos instance
+ * @returns Xronox instance
  * @throws Error if configuration is invalid
  */
-export function initChronos(config: ChronosConfig): Chronos {
+export function initXronox(config: XronoxConfig): Xronox {
   const startTime = Date.now();
-  logger.info('Initializing chronos-db', {
-    version: '2.0.0',
+  logger.info('Initializing xronox', {
+    version: '2.4.0',
     databasesCount: Object.keys(config.databases).length,
     hasSpacesConnections: !!config.spacesConnections && Object.keys(config.spacesConnections).length > 0,
     localStorageEnabled: config.localStorage?.enabled,
@@ -559,11 +559,11 @@ export function initChronos(config: ChronosConfig): Chronos {
   });
   
   // Validate configuration
-  const validatedConfig = validateChronosConfig(config);
+  const validatedConfig = validateXronoxConfig(config);
   
   // Validate transaction configuration (async, but we'll handle it in background)
   validateTransactionConfig(validatedConfig).catch(error => {
-    logger.error('chronos-db configuration validation failed', {}, error);
+    logger.error('xronox configuration validation failed', {}, error);
     // Don't throw here as it would break the synchronous initialization
     // The error will be caught when transactions are actually attempted
   });
@@ -663,7 +663,7 @@ export function initChronos(config: ChronosConfig): Chronos {
 
   // Log initialization completion
   const duration = Date.now() - startTime;
-  logger.info('chronos-db initialization completed successfully', {
+  logger.info('xronox initialization completed successfully', {
     durationMs: duration,
     collectionsCount: Object.keys(validatedConfig.collectionMaps).length,
     fallbackEnabled: !!validatedConfig.fallback?.enabled
@@ -1098,9 +1098,15 @@ export * from './read/merge.js';
 export * from './messaging/schemas.js';
 export * from './messaging/messagingApi.js';
 
+// Backwards compatibility alias
+/**
+ * @deprecated Use initXronox instead. Kept for backwards compatibility.
+ */
+export const initChronos = initXronox;
+
 // Re-export main types for convenience
 export type {
-  ChronosConfig,
+  XronoxConfig,
   RouteContext,
   VersionSpec,
   SpacesConnection,
@@ -1109,6 +1115,12 @@ export type {
   RollupConfig,
   CollectionMap,
 } from './config.js';
+
+// Backwards compatibility type alias
+/**
+ * @deprecated Use XronoxConfig instead. Kept for backwards compatibility.
+ */
+export type ChronosConfig = XronoxConfig;
 
 // Re-export state management types and functions
 export type { StateTransitionOptions, StateTransitionResult } from './admin/stateManager.js';

@@ -1,6 +1,6 @@
 import { isReplicaSetAvailable } from './utils/replicaSet.js';
 import { logger } from './utils/logger.js';
-import { ChronosConfigSchema } from './config/validate.js';
+import { XronoxConfigSchema } from './config/validate.js';
 
 // ============================================================================
 // TypeScript Interfaces
@@ -292,9 +292,9 @@ export interface TransactionConfig {
 }
 
 /**
- * Main Chronos configuration interface
+ * Main Xronox configuration interface
  */
-export interface ChronosConfig {
+export interface XronoxConfig {
   /** MongoDB connections - define once, reference by key */
   dbConnections: Record<string, DbConnection>;
   /** S3-compatible storage connections - define once, reference by key */
@@ -392,7 +392,7 @@ export interface RouteContext {
  * @param config - Configuration to validate
  * @throws Error if transaction configuration is invalid
  */
-export async function validateTransactionConfig(config: Partial<ChronosConfig>): Promise<void> {
+export async function validateTransactionConfig(config: Partial<XronoxConfig>): Promise<void> {
   logger.debug('Starting transaction configuration validation', {
     transactionsEnabled: config.transactions?.enabled,
     autoDetect: config.transactions?.autoDetect,
@@ -444,19 +444,19 @@ export async function validateTransactionConfig(config: Partial<ChronosConfig>):
 }
 
 /**
- * Validates a Chronos configuration object
+ * Validates a Xronox configuration object
  * @param config - Configuration object to validate
  * @returns Validated configuration with defaults applied
  * @throws ZodError if validation fails
  */
-export function validateChronosConfig(config: unknown): ChronosConfig {
-  logger.debug('Starting Chronos configuration validation');
+export function validateXronoxConfig(config: unknown): XronoxConfig {
+  logger.debug('Starting Xronox configuration validation');
   
   try {
-    const validated = ChronosConfigSchema.parse(config);
+    const validated = XronoxConfigSchema.parse(config);
     const resolved = resolveConfigDefaults(validated);
     
-    logger.debug('Chronos configuration validation completed successfully', {
+    logger.debug('Xronox configuration validation completed successfully', {
       databasesCount: Object.keys(resolved.databases).length,
       hasSpacesConnections: !!resolved.spacesConnections && Object.keys(resolved.spacesConnections).length > 0,
       localStorageEnabled: resolved.localStorage?.enabled,
@@ -466,7 +466,7 @@ export function validateChronosConfig(config: unknown): ChronosConfig {
     
     return resolved;
   } catch (error) {
-    logger.error('Chronos configuration validation failed', {}, error as Error);
+    logger.error('Xronox configuration validation failed', {}, error as Error);
     throw error;
   }
 }
@@ -476,7 +476,7 @@ export function validateChronosConfig(config: unknown): ChronosConfig {
  * @param config - Validated configuration
  * @returns Configuration with defaults applied
  */
-function resolveConfigDefaults(config: any): ChronosConfig {
+function resolveConfigDefaults(config: any): XronoxConfig {
   return {
     ...config,
     routing: {
@@ -502,29 +502,29 @@ function resolveConfigDefaults(config: any): ChronosConfig {
       autoDetect: true,
       ...config.transactions,
     },
-  } as ChronosConfig;
+  } as XronoxConfig;
 }
 
 /**
- * Checks if an object is a valid Chronos configuration
+ * Checks if an object is a valid Xronox configuration
  * @param obj - Object to check
  * @returns True if valid configuration
  */
-export function isValidChronosConfig(obj: unknown): obj is ChronosConfig {
-  return ChronosConfigSchema.safeParse(obj).success;
+export function isValidXronoxConfig(obj: unknown): obj is XronoxConfig {
+  return XronoxConfigSchema.safeParse(obj).success;
 }
 
 // ============================================================================
 // Global Configuration Management
 // ============================================================================
 
-let globalConfig: ChronosConfig | null = null;
+let globalConfig: XronoxConfig | null = null;
 
 /**
  * Sets the global configuration
  * @param config - Configuration to set globally
  */
-export function setGlobalConfig(config: ChronosConfig): void {
+export function setGlobalConfig(config: XronoxConfig): void {
   globalConfig = config;
 }
 
@@ -532,7 +532,7 @@ export function setGlobalConfig(config: ChronosConfig): void {
  * Gets the global configuration
  * @returns Global configuration or null if not set
  */
-export function getGlobalConfig(): ChronosConfig | null {
+export function getGlobalConfig(): XronoxConfig | null {
   return globalConfig;
 }
 

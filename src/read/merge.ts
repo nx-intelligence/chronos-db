@@ -1,5 +1,5 @@
 /**
- * Deep merge utility for Chronos-DB record objects
+ * Deep merge utility for Xronox record objects
  * Merges data properties from multiple tiers (generic -> domain -> tenant)
  */
 
@@ -41,7 +41,7 @@ function unionArrays(a: unknown[], b: unknown[], dedupe: boolean): unknown[] {
 
 /**
  * Deep merge two record objects
- * Designed for merging data across tiers in Chronos-DB
+ * Designed for merging data across tiers in Xronox
  * 
  * @param target - The base record object (from lower priority tier)
  * @param source - The record object to merge from (from higher priority tier)  

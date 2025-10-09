@@ -1,5 +1,5 @@
 /**
- * Logging utility for chronos-db with 5 log levels and logs-gateway integration
+ * Logging utility for xronox with 5 log levels and logs-gateway integration
  */
 
 import { createLogger, LogsGateway, LoggingConfig } from 'logs-gateway';
@@ -54,7 +54,7 @@ class ChronosLogger {
     const timestamp = new Date().toISOString();
     const levelName = this.levelNames[level];
     
-    let formatted = `[${timestamp}] [chronos-db] [${levelName}] ${message}`;
+    let formatted = `[${timestamp}] [xronox] [${levelName}] ${message}`;
     
     if (context && Object.keys(context).length > 0) {
       formatted += ` | Context: ${JSON.stringify(context)}`;
