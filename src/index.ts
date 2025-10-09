@@ -580,7 +580,7 @@ export function initXronox(
   }
   
   logger.info('Initializing xronox', {
-    version: '2.7.1',
+    version: '2.8.0',
     databasesCount: Object.keys(finalConfig.databases).length,
     hasSpacesConnections: !!finalConfig.spacesConnections && Object.keys(finalConfig.spacesConnections).length > 0,
     localStorageEnabled: finalConfig.localStorage?.enabled,

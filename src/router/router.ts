@@ -21,6 +21,7 @@ import { S3StorageAdapter } from '../storage/s3Adapter.js';
 import { AzureBlobStorageAdapter } from '../storage/azureAdapter.js';
 import type { StorageAdapter } from '../storage/interface.js';
 import { logger } from '../utils/logger.js';
+import { DynamicTenantResolver } from './dynamicTenants.js';
 
 // ============================================================================
 // Helper Functions for Multi-Bucket Support
@@ -59,14 +60,17 @@ export interface RouterInitArgs {
       genericDatabase: GenericDatabase;
       domainsDatabases: DomainDatabase[];
       tenantDatabases: TenantDatabase[];
+      dynamicTenants?: import('./dynamicTenants.js').DynamicTenantsConfig;
     };
     knowledge?: {
       genericDatabase: GenericDatabase;
       domainsDatabases: DomainDatabase[];
       tenantDatabases: TenantDatabase[];
+      dynamicTenants?: import('./dynamicTenants.js').DynamicTenantsConfig;
     };
     runtime?: {
       tenantDatabases: RuntimeTenantDatabase[];
+      dynamicTenants?: import('./dynamicTenants.js').DynamicTenantsConfig;
     };
     logs?: LogsDatabase;
     messaging?: MessagingDatabase;
@@ -103,14 +107,17 @@ export class BridgeRouter {
       genericDatabase: GenericDatabase;
       domainsDatabases: DomainDatabase[];
       tenantDatabases: TenantDatabase[];
+      dynamicTenants?: import('./dynamicTenants.js').DynamicTenantsConfig;
     };
     knowledge?: {
       genericDatabase: GenericDatabase;
       domainsDatabases: DomainDatabase[];
       tenantDatabases: TenantDatabase[];
+      dynamicTenants?: import('./dynamicTenants.js').DynamicTenantsConfig;
     };
     runtime?: {
       tenantDatabases: RuntimeTenantDatabase[];
+      dynamicTenants?: import('./dynamicTenants.js').DynamicTenantsConfig;
     };
     logs?: LogsDatabase;
     messaging?: MessagingDatabase;
@@ -120,6 +127,9 @@ export class BridgeRouter {
   // Connection pools (lazy initialization)
   private mongoClients: Map<number, MongoClient> = new Map();
   private s3Clients: Map<number, S3Client> = new Map();
+  
+  // Dynamic tenant resolver
+  private dynamicTenantResolver: DynamicTenantResolver;
   
   // Initialization state
   private _isShutdown = false;
@@ -145,12 +155,18 @@ export class BridgeRouter {
     this.chooseKey = args.chooseKey ?? 'tenantId|dbName|collection:objectId';
     this.databases = args.databases;
     
+    // Initialize dynamic tenant resolver
+    const maxCacheSize = 10000; // TODO: Make configurable
+    const cacheExpiry = 3600; // TODO: Make configurable
+    this.dynamicTenantResolver = new DynamicTenantResolver(maxCacheSize, cacheExpiry);
+    
     logger.debug('BridgeRouter configuration set', {
       databasesCount: Object.keys(this.databases).length,
       hasSpacesConnections: Object.keys(this.spacesConnections).length > 0,
       hasLocalStorage: !!this.localStorage,
       hashAlgo: this.hashAlgo,
-      chooseKey: this.chooseKey
+      chooseKey: this.chooseKey,
+      hasDynamicTenants: !!(this.databases.metadata?.dynamicTenants || this.databases.knowledge?.dynamicTenants || this.databases.runtime?.dynamicTenants)
     });
     
     // Initialize local storage buckets if enabled
@@ -346,7 +362,22 @@ export class BridgeRouter {
         }
         
         if (tier === 'tenant' && tenantId) {
-          const tenantDb = this.databases.metadata.tenantDatabases.find(db => db.tenantId === tenantId);
+          // Try static configuration first
+          let tenantDb = this.databases.metadata.tenantDatabases.find(db => db.tenantId === tenantId);
+          
+          // If not found, try dynamic tenant resolution
+          if (!tenantDb && this.databases.metadata.dynamicTenants) {
+            tenantDb = this.dynamicTenantResolver.resolve(
+              tenantId,
+              this.databases.metadata.tenantDatabases,
+              this.databases.metadata.dynamicTenants,
+              ctx.tenantTier || ctx.tenantMeta ? {
+                ...(ctx.tenantTier && { tier: ctx.tenantTier }),
+                ...(ctx.tenantMeta && { meta: ctx.tenantMeta }),
+              } : undefined
+            );
+          }
+          
           if (!tenantDb) return null;
           const dbConn = this.findDbConnection(tenantDb.dbConnRef);
           if (!dbConn) return null;
@@ -372,7 +403,22 @@ export class BridgeRouter {
         }
         
         if (tier === 'tenant' && tenantId) {
-          const tenantDb = this.databases.knowledge.tenantDatabases.find(db => db.tenantId === tenantId);
+          // Try static configuration first
+          let tenantDb = this.databases.knowledge.tenantDatabases.find(db => db.tenantId === tenantId);
+          
+          // If not found, try dynamic tenant resolution
+          if (!tenantDb && this.databases.knowledge.dynamicTenants) {
+            tenantDb = this.dynamicTenantResolver.resolve(
+              tenantId,
+              this.databases.knowledge.tenantDatabases,
+              this.databases.knowledge.dynamicTenants,
+              ctx.tenantTier || ctx.tenantMeta ? {
+                ...(ctx.tenantTier && { tier: ctx.tenantTier }),
+                ...(ctx.tenantMeta && { meta: ctx.tenantMeta }),
+              } : undefined
+            );
+          }
+          
           if (!tenantDb) return null;
           const dbConn = this.findDbConnection(tenantDb.dbConnRef);
           if (!dbConn) return null;
@@ -383,7 +429,22 @@ export class BridgeRouter {
       case 'runtime':
         if (!this.databases.runtime || !tenantId) return null;
         
-        const runtimeTenantDb = this.databases.runtime.tenantDatabases.find(db => db.tenantId === tenantId);
+        // Try static configuration first
+        let runtimeTenantDb = this.databases.runtime.tenantDatabases.find(db => db.tenantId === tenantId);
+        
+          // If not found, try dynamic tenant resolution
+          if (!runtimeTenantDb && this.databases.runtime.dynamicTenants) {
+            runtimeTenantDb = this.dynamicTenantResolver.resolve(
+              tenantId,
+              this.databases.runtime.tenantDatabases,
+              this.databases.runtime.dynamicTenants,
+              ctx.tenantTier || ctx.tenantMeta ? {
+                ...(ctx.tenantTier && { tier: ctx.tenantTier }),
+                ...(ctx.tenantMeta && { meta: ctx.tenantMeta }),
+              } : undefined
+            );
+          }
+        
         if (!runtimeTenantDb) return null;
         const runtimeDbConn = this.findDbConnection(runtimeTenantDb.dbConnRef);
         if (!runtimeDbConn) return null;
@@ -485,7 +546,19 @@ export class BridgeRouter {
           spacesConn = this.findSpacesConnection(domainDb.spaceConnRef);
           bucket = resolveBucket(domainDb);
         } else if (ctx.tier === 'tenant' && ctx.tenantId) {
-          const tenantDb = this.databases.metadata.tenantDatabases.find(db => db.tenantId === ctx.tenantId);
+          // Try static first, then dynamic
+          let tenantDb = this.databases.metadata.tenantDatabases.find(db => db.tenantId === ctx.tenantId);
+          if (!tenantDb && this.databases.metadata.dynamicTenants) {
+            tenantDb = this.dynamicTenantResolver.resolve(
+              ctx.tenantId,
+              this.databases.metadata.tenantDatabases,
+              this.databases.metadata.dynamicTenants,
+              ctx.tenantTier || ctx.tenantMeta ? {
+                ...(ctx.tenantTier && { tier: ctx.tenantTier }),
+                ...(ctx.tenantMeta && { meta: ctx.tenantMeta }),
+              } : undefined
+            );
+          }
           if (!tenantDb) throw new Error(`Tenant '${ctx.tenantId}' not found in metadata databases`);
           spacesConn = this.findSpacesConnection(tenantDb.spaceConnRef);
           bucket = resolveBucket(tenantDb);
@@ -504,7 +577,19 @@ export class BridgeRouter {
           spacesConn = this.findSpacesConnection(domainDb.spaceConnRef);
           bucket = resolveBucket(domainDb);
         } else if (ctx.tier === 'tenant' && ctx.tenantId) {
-          const tenantDb = this.databases.knowledge.tenantDatabases.find(db => db.tenantId === ctx.tenantId);
+          // Try static first, then dynamic
+          let tenantDb = this.databases.knowledge.tenantDatabases.find(db => db.tenantId === ctx.tenantId);
+          if (!tenantDb && this.databases.knowledge.dynamicTenants) {
+            tenantDb = this.dynamicTenantResolver.resolve(
+              ctx.tenantId,
+              this.databases.knowledge.tenantDatabases,
+              this.databases.knowledge.dynamicTenants,
+              ctx.tenantTier || ctx.tenantMeta ? {
+                ...(ctx.tenantTier && { tier: ctx.tenantTier }),
+                ...(ctx.tenantMeta && { meta: ctx.tenantMeta }),
+              } : undefined
+            );
+          }
           if (!tenantDb) throw new Error(`Tenant '${ctx.tenantId}' not found in knowledge databases`);
           spacesConn = this.findSpacesConnection(tenantDb.spaceConnRef);
           bucket = resolveBucket(tenantDb);
@@ -514,7 +599,19 @@ export class BridgeRouter {
       case 'runtime':
         if (!this.databases.runtime || !ctx.tenantId) throw new Error('Runtime databases not configured or tenantId missing');
         
-        const runtimeTenantDb = this.databases.runtime.tenantDatabases.find(db => db.tenantId === ctx.tenantId);
+        // Try static first, then dynamic
+        let runtimeTenantDb = this.databases.runtime.tenantDatabases.find(db => db.tenantId === ctx.tenantId);
+        if (!runtimeTenantDb && this.databases.runtime.dynamicTenants) {
+          runtimeTenantDb = this.dynamicTenantResolver.resolve(
+            ctx.tenantId,
+            this.databases.runtime.tenantDatabases,
+            this.databases.runtime.dynamicTenants,
+            ctx.tenantTier || ctx.tenantMeta ? {
+              ...(ctx.tenantTier && { tier: ctx.tenantTier }),
+              ...(ctx.tenantMeta && { meta: ctx.tenantMeta }),
+            } : undefined
+          );
+        }
         if (!runtimeTenantDb) throw new Error(`Tenant '${ctx.tenantId}' not found in runtime databases`);
         
         // Runtime S3 is optional for backward compatibility (but HIGHLY RECOMMENDED for production)
@@ -691,7 +788,19 @@ export class BridgeRouter {
         
       case 'runtime':
         if (ctx.tenantId) {
-          const runtimeTenantDb = this.databases.runtime!.tenantDatabases.find(db => db.tenantId === ctx.tenantId);
+          // Try static first, then dynamic
+          let runtimeTenantDb = this.databases.runtime!.tenantDatabases.find(db => db.tenantId === ctx.tenantId);
+          if (!runtimeTenantDb && this.databases.runtime!.dynamicTenants) {
+            runtimeTenantDb = this.dynamicTenantResolver.resolve(
+              ctx.tenantId,
+              this.databases.runtime!.tenantDatabases,
+              this.databases.runtime!.dynamicTenants,
+              ctx.tenantTier || ctx.tenantMeta ? {
+                ...(ctx.tenantTier && { tier: ctx.tenantTier }),
+                ...(ctx.tenantMeta && { meta: ctx.tenantMeta }),
+              } : undefined
+            );
+          }
           if (runtimeTenantDb && runtimeTenantDb.spaceConnRef) {
             spacesConn = this.findSpacesConnection(runtimeTenantDb.spaceConnRef);
             bucket = resolveBucket(runtimeTenantDb);

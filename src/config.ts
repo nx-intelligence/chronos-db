@@ -1,6 +1,7 @@
 import { isReplicaSetAvailable } from './utils/replicaSet.js';
 import { logger } from './utils/logger.js';
 import { XronoxConfigSchema } from './config/validate.js';
+import type { DynamicTenantsConfig } from './router/dynamicTenants.js';
 
 // ============================================================================
 // TypeScript Interfaces
@@ -467,6 +468,8 @@ export interface XronoxConfig {
       domainsDatabases: DomainDatabase[];
       /** Tenant-specific metadata databases */
       tenantDatabases: TenantDatabase[];
+      /** Dynamic tenant configuration (NEW in v2.8.0) */
+      dynamicTenants?: DynamicTenantsConfig;
     };
     /** Knowledge databases with 3 tiers: generic, domains, tenants */
     knowledge?: {
@@ -476,11 +479,15 @@ export interface XronoxConfig {
       domainsDatabases: DomainDatabase[];
       /** Tenant-specific knowledge databases */
       tenantDatabases: TenantDatabase[];
+      /** Dynamic tenant configuration (NEW in v2.8.0) */
+      dynamicTenants?: DynamicTenantsConfig;
     };
     /** Runtime databases with tenant tier only */
     runtime?: {
       /** Tenant-specific runtime databases (includes analytics) */
       tenantDatabases: RuntimeTenantDatabase[];
+      /** Dynamic tenant configuration (NEW in v2.8.0) */
+      dynamicTenants?: DynamicTenantsConfig;
     };
     /** Logs database (simple flat structure) */
     logs?: LogsDatabase;
@@ -539,6 +546,10 @@ export interface RouteContext {
   tenantId?: string;
   /** Domain identifier */
   domain?: string;
+  /** Tenant tier (for dynamic tenants) - e.g., 'free', 'premium', 'enterprise' */
+  tenantTier?: string;
+  /** Tenant metadata (for template variable resolution) */
+  tenantMeta?: Record<string, string>;
 }
 
 // ============================================================================
