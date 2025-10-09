@@ -619,10 +619,43 @@ devShadow: {
 ### **Installation**
 
 ```bash
-npm install xronox@^2.4.0
+npm install xronox@^2.6.0
 ```
 
 **Note:** The package was previously named `chronos-db`. Starting from v2.4.0, it's published as `xronox`.
+
+### **🎯 Quick Start with Config Builder** (NEW in v2.6.0!)
+
+The easiest way to get started:
+
+```typescript
+import { createProductionConfig, initXronox } from 'xronox';
+
+const config = createProductionConfig({
+  mongoUri: process.env.MONGO_URI!,
+  s3Endpoint: 'https://s3.amazonaws.com',
+  s3Region: 'us-east-1',
+  s3AccessKey: process.env.AWS_ACCESS_KEY_ID!,
+  s3SecretKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  tenants: ['acme-corp', 'globex-inc'],
+  bucketPrefix: 'myapp'
+});
+
+const xronox = initXronox(config);
+```
+
+**For Development**:
+
+```typescript
+import { createDevConfig, initXronox } from 'xronox';
+
+const config = createDevConfig({
+  mongoUri: 'mongodb://localhost:27017',
+  basePath: './xronox-data'
+});
+
+const xronox = initXronox(config);
+```
 
 ### **Enterprise Multi-Tenant Setup**
 
@@ -2260,6 +2293,7 @@ Tested with:
 
 ## 📚 **Documentation**
 
+- [Storage Architecture Guide](./docs/STORAGE_ARCHITECTURE.md) - **NEW!** Multi-bucket strategy, versioning architecture, cost optimization
 - [Configuration Guide](./docs/CONFIGURATION.md) - Detailed configuration
 - [API Reference](./docs/API.md) - Complete API documentation
 - [Examples](./docs/EXAMPLES.md) - Code examples and patterns

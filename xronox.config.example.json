@@ -1,0 +1,112 @@
+{
+  "xronox": {
+    "dbConnections": {
+      "primary": {
+        "mongoUri": "ENV.MONGO_URI"
+      }
+    },
+    "spacesConnections": {
+      "s3-primary": {
+        "endpoint": "ENV.S3_ENDPOINT",
+        "region": "ENV.S3_REGION",
+        "accessKey": "ENV.S3_ACCESS_KEY",
+        "secretKey": "ENV.S3_SECRET_KEY",
+        "buckets": {
+          "records": "xronox-records",
+          "versions": "xronox-versions",
+          "content": "xronox-content",
+          "backups": "xronox-backups"
+        }
+      }
+    },
+    "databases": {
+      "knowledge": {
+        "genericDatabase": {
+          "dbConnRef": "primary",
+          "spaceConnRef": "s3-primary",
+          "recordsBucket": "xronox-knowledge-records",
+          "contentBucket": "xronox-knowledge-content",
+          "backupsBucket": "xronox-knowledge-backups",
+          "dbName": "athenix_knowledge"
+        },
+        "domainsDatabases": [],
+        "tenantDatabases": []
+      },
+      "metadata": {
+        "genericDatabase": {
+          "dbConnRef": "primary",
+          "spaceConnRef": "s3-primary",
+          "recordsBucket": "xronox-metadata-records",
+          "contentBucket": "xronox-metadata-content",
+          "backupsBucket": "xronox-metadata-backups",
+          "dbName": "athenix_metadata"
+        },
+        "domainsDatabases": [],
+        "tenantDatabases": []
+      },
+      "runtime": {
+        "tenantDatabases": [
+          {
+            "tenantId": "tenant-a",
+            "dbConnRef": "primary",
+            "spaceConnRef": "s3-primary",
+            "recordsBucket": "xronox-runtime-records",
+            "versionsBucket": "xronox-runtime-versions",
+            "contentBucket": "xronox-runtime-content",
+            "backupsBucket": "xronox-runtime-backups",
+            "dbName": "athenix_runtime_tenant_a",
+            "analyticsDbName": "athenix_analytics_tenant_a"
+          }
+        ]
+      },
+      "logs": {
+        "dbConnRef": "primary",
+        "spaceConnRef": "s3-primary",
+        "recordsBucket": "xronox-logs-records",
+        "contentBucket": "xronox-logs-content",
+        "dbName": "athenix_logs"
+      },
+      "messaging": {
+        "dbConnRef": "primary",
+        "spaceConnRef": "s3-primary",
+        "recordsBucket": "xronox-messaging-records",
+        "contentBucket": "xronox-messaging-content",
+        "backupsBucket": "xronox-messaging-backups",
+        "dbName": "athenix_messaging",
+        "captureDeliveries": false
+      },
+      "identities": {
+        "dbConnRef": "primary",
+        "spaceConnRef": "s3-primary",
+        "recordsBucket": "xronox-identities-records",
+        "contentBucket": "xronox-identities-content",
+        "backupsBucket": "xronox-identities-backups",
+        "dbName": "athenix_identities"
+      }
+    },
+    "routing": {
+      "hashAlgo": "rendezvous"
+    },
+    "collectionMaps": {
+      "activity_logs": {
+        "indexedProps": ["agentId", "timestamp", "action"],
+        "s3Offload": {
+          "enabled": true,
+          "olderThan": 30
+        }
+      }
+    },
+    "retention": {
+      "ver": {
+        "days": 365,
+        "maxPerItem": 100
+      },
+      "counters": {
+        "days": 30,
+        "weeks": 12,
+        "months": 6
+      }
+    }
+  }
+}
+

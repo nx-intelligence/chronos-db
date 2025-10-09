@@ -1,6 +1,7 @@
 import { validateXronoxConfig, validateTransactionConfig, type XronoxConfig, type RouteContext } from './config.js';
 import { setGlobalConfig } from './config/global.js';
 import { logger } from './utils/logger.js';
+import { loadConfig } from './config/loader.js';
 import { BridgeRouter } from './router/router.js';
 import type { RestoreResult as RestoreRestoreResult, CollectionRestoreResult, VersionSpec as RestoreVersionSpec, CollVersionSpec, RestoreOptions, CollectionRestoreOptions } from './db/restore.js';
 import { CounterTotalsRepo, type CounterTotalsDoc } from './counters/counters.js';
@@ -544,22 +545,50 @@ export interface PruneResult {
 
 /**
  * Initialize Xronox with the given configuration
- * @param config - Configuration object
+ * 
+ * @param config - Configuration object (optional - will auto-discover from file if not provided)
+ * @param options - Initialization options
  * @returns Xronox instance
- * @throws Error if configuration is invalid
+ * @throws {XronoxConfigNotFoundError} If no config provided and no config file found
+ * @throws {XronoxEnvVarMissingError} If ENV variable referenced in config is missing
+ * @throws {XronoxConfigValidationError} If configuration is invalid
+ * 
+ * @example
+ * // Option 1: Provide config explicitly
+ * const xronox = initXronox({ dbConnections: { ... }, databases: { ... } });
+ * 
+ * @example
+ * // Option 2: Auto-discover from xronox.config.json
+ * const xronox = initXronox();
  */
-export function initXronox(config: XronoxConfig): Xronox {
+export function initXronox(
+  config?: XronoxConfig,
+  options?: { verbose?: boolean }
+): Xronox {
   const startTime = Date.now();
+  
+  // Load configuration (from argument or file)
+  const loadResult = loadConfig(config, options?.verbose ? { verbose: true } : {});
+  const finalConfig = loadResult.config;
+  
+  // Log configuration source
+  if (loadResult.source === 'file') {
+    logger.info('Xronox configuration loaded from file', {
+      filePath: loadResult.filePath,
+      resolvedEnvVars: loadResult.resolvedVars?.length || 0,
+    });
+  }
+  
   logger.info('Initializing xronox', {
-    version: '2.4.0',
-    databasesCount: Object.keys(config.databases).length,
-    hasSpacesConnections: !!config.spacesConnections && Object.keys(config.spacesConnections).length > 0,
-    localStorageEnabled: config.localStorage?.enabled,
-    transactionsEnabled: config.transactions?.enabled
+    version: '2.7.0',
+    databasesCount: Object.keys(finalConfig.databases).length,
+    hasSpacesConnections: !!finalConfig.spacesConnections && Object.keys(finalConfig.spacesConnections).length > 0,
+    localStorageEnabled: finalConfig.localStorage?.enabled,
+    transactionsEnabled: finalConfig.transactions?.enabled
   });
   
   // Validate configuration
-  const validatedConfig = validateXronoxConfig(config);
+  const validatedConfig = validateXronoxConfig(finalConfig);
   
   // Validate transaction configuration (async, but we'll handle it in background)
   validateTransactionConfig(validatedConfig).catch(error => {
@@ -574,12 +603,12 @@ export function initXronox(config: XronoxConfig): Xronox {
   // Initialize router
   logger.debug('Initializing BridgeRouter');
   const router = new BridgeRouter({
-    dbConnections: config.dbConnections,
-    spacesConnections: config.spacesConnections,
-    databases: config.databases,
-    ...(config.localStorage && { localStorage: config.localStorage }),
-    hashAlgo: config.routing.hashAlgo,
-    chooseKey: config.routing.chooseKey ?? 'tenantId|dbName|collection:objectId',
+    dbConnections: validatedConfig.dbConnections,
+    spacesConnections: validatedConfig.spacesConnections,
+    databases: validatedConfig.databases,
+    ...(validatedConfig.localStorage && { localStorage: validatedConfig.localStorage }),
+    hashAlgo: validatedConfig.routing.hashAlgo,
+    chooseKey: validatedConfig.routing.chooseKey ?? 'tenantId|dbName|collection:objectId',
   });
   logger.debug('BridgeRouter initialized successfully');
 
@@ -587,18 +616,18 @@ export function initXronox(config: XronoxConfig): Xronox {
   let countersRepo: CounterTotalsRepo | null = null;
   const initAnalytics = async () => {
     // Check if runtime databases have analytics configured
-    if (!config.databases.runtime?.tenantDatabases) {
+    if (!validatedConfig.databases.runtime?.tenantDatabases) {
       return null; // Skip analytics if no runtime databases configured
     }
     
     if (!countersRepo) {
       // Use the first runtime tenant database for analytics
-      const firstTenantDb = config.databases.runtime.tenantDatabases[0];
+      const firstTenantDb = validatedConfig.databases.runtime.tenantDatabases[0];
       if (!firstTenantDb) {
         throw new Error('No runtime tenant databases configured');
       }
       
-      const dbConn = config.dbConnections[firstTenantDb.dbConnRef];
+      const dbConn = validatedConfig.dbConnections[firstTenantDb.dbConnRef];
       if (!dbConn) {
         throw new Error(`Database connection '${firstTenantDb.dbConnRef}' not found`);
       }
@@ -606,7 +635,7 @@ export function initXronox(config: XronoxConfig): Xronox {
       const analyticsClient = new MongoClient(dbConn.mongoUri);
       await analyticsClient.connect();
       const analyticsDb = analyticsClient.db(firstTenantDb.analyticsDbName);
-      countersRepo = new CounterTotalsRepo(analyticsDb, config.analytics?.counterRules || []);
+      countersRepo = new CounterTotalsRepo(analyticsDb, validatedConfig.analytics?.counterRules || []);
       await countersRepo.ensureIndexes();
     }
     return countersRepo;
@@ -619,32 +648,32 @@ export function initXronox(config: XronoxConfig): Xronox {
 
   // Get first available MongoDB URI for fallback
   let fallbackMongoUri: string | undefined;
-  if (config.databases.metadata?.genericDatabase) {
-    const dbConn = config.dbConnections[config.databases.metadata.genericDatabase.dbConnRef];
+  if (validatedConfig.databases.metadata?.genericDatabase) {
+    const dbConn = validatedConfig.dbConnections[validatedConfig.databases.metadata.genericDatabase.dbConnRef];
     if (dbConn) fallbackMongoUri = dbConn.mongoUri;
-  } else if (config.databases.knowledge?.genericDatabase) {
-    const dbConn = config.dbConnections[config.databases.knowledge.genericDatabase.dbConnRef];
+  } else if (validatedConfig.databases.knowledge?.genericDatabase) {
+    const dbConn = validatedConfig.dbConnections[validatedConfig.databases.knowledge.genericDatabase.dbConnRef];
     if (dbConn) fallbackMongoUri = dbConn.mongoUri;
-  } else if (config.databases.runtime?.tenantDatabases?.[0]) {
-    const dbConn = config.dbConnections[config.databases.runtime.tenantDatabases[0].dbConnRef];
+  } else if (validatedConfig.databases.runtime?.tenantDatabases?.[0]) {
+    const dbConn = validatedConfig.dbConnections[validatedConfig.databases.runtime.tenantDatabases[0].dbConnRef];
     if (dbConn) fallbackMongoUri = dbConn.mongoUri;
-  } else if (config.databases.logs) {
-    const dbConn = config.dbConnections[config.databases.logs.dbConnRef];
+  } else if (validatedConfig.databases.logs) {
+    const dbConn = validatedConfig.dbConnections[validatedConfig.databases.logs.dbConnRef];
     if (dbConn) fallbackMongoUri = dbConn.mongoUri;
   }
 
-  if (config.fallback?.enabled && fallbackMongoUri) {
+  if (validatedConfig.fallback?.enabled && fallbackMongoUri) {
     const fallbackClient = new MongoClient(fallbackMongoUri);
     fallbackClient.connect().then(() => {
       const fallbackDb = fallbackClient.db('chronos_system');
-      if (config.fallback) {
-        fallbackQueue = new FallbackQueue(fallbackDb, config.fallback);
+      if (validatedConfig.fallback) {
+        fallbackQueue = new FallbackQueue(fallbackDb, validatedConfig.fallback);
       }
       
       // Initialize worker
-      if (config.fallback && fallbackQueue) {
+      if (validatedConfig.fallback && fallbackQueue) {
         const workerOptions: WorkerOptions = {
-          ...config.fallback,
+          ...validatedConfig.fallback,
           pollIntervalMs: 5000, // 5 seconds
           batchSize: 10,
           verbose: false,
@@ -657,8 +686,8 @@ export function initXronox(config: XronoxConfig): Xronox {
   }
 
   // Initialize write optimizer (if enabled)
-  if (config.writeOptimization) {
-    writeOptimizer = new WriteOptimizer(config.writeOptimization);
+  if (validatedConfig.writeOptimization) {
+    writeOptimizer = new WriteOptimizer(validatedConfig.writeOptimization);
   }
 
   // Log initialization completion
@@ -684,8 +713,8 @@ export function initXronox(config: XronoxConfig): Xronox {
           if (actor !== undefined) opts.actor = actor;
           if (reason !== undefined) opts.reason = reason;
           const crudConfig: any = {};
-          if (config.devShadow) {
-            crudConfig.devShadow = config.devShadow;
+          if (validatedConfig.devShadow) {
+            crudConfig.devShadow = validatedConfig.devShadow;
           }
           return await createItem(router, ctx, data, opts, crudConfig);
         },
@@ -702,8 +731,8 @@ export function initXronox(config: XronoxConfig): Xronox {
           if (actor !== undefined) opts.actor = actor;
           if (reason !== undefined) opts.reason = reason;
           const crudConfig: any = {};
-          if (config.devShadow) {
-            crudConfig.devShadow = config.devShadow;
+          if (validatedConfig.devShadow) {
+            crudConfig.devShadow = validatedConfig.devShadow;
           }
           return await updateItem(router, ctx, id, data, opts, crudConfig);
         },
@@ -719,8 +748,8 @@ export function initXronox(config: XronoxConfig): Xronox {
           if (actor !== undefined) opts.actor = actor;
           if (reason !== undefined) opts.reason = reason;
           const crudConfig: any = {};
-          if (config.devShadow) {
-            crudConfig.devShadow = config.devShadow;
+          if (validatedConfig.devShadow) {
+            crudConfig.devShadow = validatedConfig.devShadow;
           }
           return await deleteItem(router, ctx, id, opts, crudConfig);
         },
@@ -735,8 +764,8 @@ export function initXronox(config: XronoxConfig): Xronox {
             ...(ctx.tenantId && { tenantId: ctx.tenantId }),
           };
           const enrichConfig: any = {};
-          if (config.devShadow) {
-            enrichConfig.devShadow = config.devShadow;
+          if (validatedConfig.devShadow) {
+            enrichConfig.devShadow = validatedConfig.devShadow;
           }
           return await enrichRecord(router, enrichCtx, id, enrichment, opts, enrichConfig);
         },
@@ -745,8 +774,8 @@ export function initXronox(config: XronoxConfig): Xronox {
           opts: SmartInsertOptions
         ) => {
           const smartConfig: any = {};
-          if (config.devShadow) {
-            smartConfig.devShadow = config.devShadow;
+          if (validatedConfig.devShadow) {
+            smartConfig.devShadow = validatedConfig.devShadow;
           }
           return await smartInsert(router, ctx, data, opts, smartConfig);
         },
@@ -869,10 +898,10 @@ export function initXronox(config: XronoxConfig): Xronox {
 
     admin: {
       health: async () => {
-        return await health(router, config);
+        return await health(router, validatedConfig);
       },
       shutdown: async () => {
-        await shutdown(router, config);
+        await shutdown(router, validatedConfig);
         if (fallbackWorker) {
           await fallbackWorker.stop();
         }
@@ -993,7 +1022,7 @@ export function initXronox(config: XronoxConfig): Xronox {
       const mongoClientPromise = router.getMongoClient(dbInfo.mongoUri);
       
       // Get captureDeliveries flag from config
-      const captureDeliveries = config.databases.messaging?.captureDeliveries ?? false;
+      const captureDeliveries = validatedConfig.databases.messaging?.captureDeliveries ?? false;
 
       // Import and create messaging API
       const { createMessagingApi } = require('./messaging/messagingApi.js');
@@ -1105,6 +1134,32 @@ export {
   createProductionConfig, 
   createMinimalConfig 
 } from './config/builder.js';
+
+// Configuration Loading & ENV Resolution
+export {
+  discoverConfigFile,
+  loadConfigFromFile,
+  autoLoadConfig,
+} from './config/loader.js';
+export type { LoadConfigOptions, LoadConfigResult } from './config/loader.js';
+
+export {
+  resolveEnvTokens,
+  extractEnvTokens,
+  maskSecret,
+  maskSecretsInObject,
+} from './config/envResolver.js';
+export type { EnvResolutionOptions, EnvResolutionResult } from './config/envResolver.js';
+
+// Configuration Errors
+export {
+  XronoxError,
+  XronoxConfigNotFoundError,
+  XronoxConfigParseError,
+  XronoxEnvVarMissingError,
+  XronoxConfigValidationError,
+  XronoxConfigStructureError,
+} from './config/errors.js';
 
 // Backwards compatibility alias
 /**
