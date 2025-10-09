@@ -1,6 +1,6 @@
 {
   "name": "xronox",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "Xronox v3.0: Enterprise-grade MongoDB persistence layer with embedded multi-tenancy, tiered architecture, and big data capabilities. Features time-travel versioning, S3/Azure/local storage, enrichment API, Identity system, and field projection. NEW: Standard Identity interface for attribution & audit trails, Hidden Fields & Projection system for clean responses, Dynamic tenant resolution, Multi-bucket storage, Auto-loading config with ENV tokens.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

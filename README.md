@@ -1412,6 +1412,71 @@ await ops.restoreCollection({ cv: 100 });
 await ops.restoreCollection({ at: '2024-01-01T00:00:00Z' });
 ```
 
+### **7B. XronoxClient - MongoDB-like API** ⭐ NEW in v3.0.1
+
+Simplified MongoDB-compatible client for CRUD operations:
+
+```typescript
+import { initXronox, createXronoxClient } from 'xronox';
+
+const xronox = await initXronox();
+const client = createXronoxClient(xronox, {
+  databaseType: 'knowledge',
+  tier: 'tenant',
+  tenantId: 'default'
+});
+
+// Insert with auto-generated ID
+const id = await client.insert('knowledge_items', {
+  topic: 'quantum-computing',
+  content: { text: '...' },
+  confidence: 0.9
+});
+
+// Find one
+const item = await client.findOne('knowledge_items', {
+  topic: 'quantum-computing'
+});
+
+// Find by ID
+const doc = await client.findById('knowledge_items', id);
+
+// Find multiple with filters
+const items = await client.find('knowledge_items', {
+  state: 'known',
+  confidence: { $gte: 0.8 }
+}, {
+  limit: 10,
+  projection: { include: ['topic', 'content'], exclude: [] }
+});
+
+// Update
+await client.update('knowledge_items', id, {
+  confidence: 0.95
+});
+
+// Delete
+await client.delete('knowledge_items', id);
+
+// Bulk delete (GDPR compliance)
+const deletedCount = await client.deleteMany('knowledge_items', {
+  '_metadata.identity.identifier': 'user-123'
+});
+
+// Count
+const total = await client.count('knowledge_items', {
+  state: 'known'
+});
+```
+
+**Why XronoxClient?**
+- ✅ Familiar MongoDB-like API
+- ✅ Auto-generates IDs
+- ✅ Simplified CRUD operations
+- ✅ Field projection support
+- ✅ GDPR compliance (`deleteMany`)
+- ✅ Type-safe with generics
+
 ### **8. Identity & Attribution System** ⭐ NEW in v3.0
 
 Track **WHO** created or modified data with a standardized identity interface across your entire ecosystem.
@@ -1726,23 +1791,209 @@ const knowledgeWithContext = await knowledgeOps.getLatest(id, {
 
 ## 🔐 **Security & Compliance**
 
-### **GDPR Compliance**
+### **GDPR Compliance** 🔒
+
+**GDPR = General Data Protection Regulation** - EU law giving users the **"Right to be Forgotten"**
+
+#### **Why GDPR Compliance is Critical**
+- ✅ **Legally Required**: Must comply within 30 days of user request
+- ✅ **Massive Fines**: Up to €20M or 4% of global revenue for non-compliance
+- ✅ **User Rights**: Fundamental privacy right in EU
+- ✅ **Global Requirement**: Applies to ANY company serving EU citizens
+
+#### **GDPR Features in Xronox**
+
+**1. Identity-Based Data Tracking**
+
+Every record can be attributed to an identity:
 
 ```typescript
-// Enable logical delete for GDPR compliance
-logicalDelete: {
-  enabled: true  // Default - enables data recovery and audit trails
-},
+import { createUserIdentity } from 'xronox';
 
-// Enable versioning for data lineage
-versioning: {
-  enabled: true  // Default - enables time-travel queries and audit trails
+const userIdentity = createUserIdentity('user-123', 'John Doe', {
+  email: 'john@example.com'
+});
+
+// Track WHO created data
+await ops.create(data, userIdentity, 'user-action');
+
+// All data is now linked to user-123 via identity
+```
+
+**2. Find All Data for a User**
+
+Query all records created/modified by a specific user:
+
+```typescript
+// Find by creator
+const userRecords = await ops.query({
+  meta: { '_system.creator.identifier': 'user-123' }
+});
+
+// Find by updater  
+const userUpdates = await ops.query({
+  meta: { '_system.updater.identifier': 'user-123' }
+});
+
+// Find by identity type
+const userCreatedData = await ops.query({
+  meta: { 
+    '_system.creator.type': 'user',
+    '_system.creator.identifier': 'user-123'
+  }
+});
+```
+
+**3. Bulk Delete User Data (Right to be Forgotten)** ⭐ NEW in v3.0.1
+
+```typescript
+import { createXronoxClient } from 'xronox';
+
+const client = createXronoxClient(xronox, {
+  databaseType: 'knowledge',
+  tier: 'tenant',
+  tenantId: 'tenant-a'
+});
+
+// Delete ALL data for a user (GDPR compliance)
+const deletedCount = await client.deleteMany('knowledge_items', {
+  '_metadata.identity.identifier': 'user-123',
+  '_metadata.tenantId': 'tenant-a'
+});
+
+console.log(`GDPR: Deleted ${deletedCount} items for user-123`);
+// Returns: number of deleted documents
+```
+
+**4. GDPR Deletion Workflow**
+
+```typescript
+// Step 1: User requests data deletion
+async function handleGDPRDeletionRequest(userId: string, tenantId: string) {
+  const client = createXronoxClient(xronox, {
+    databaseType: 'knowledge',
+    tier: 'tenant',
+    tenantId
+  });
+
+  // Step 2: Find all user data
+  const userKnowledge = await client.find('knowledge_items', {
+    '_metadata.identity.identifier': userId,
+    '_metadata.tenantId': tenantId
+  });
+
+  console.log(`Found ${userKnowledge.length} knowledge items for user ${userId}`);
+
+  // Step 3: Delete all user data
+  const deletedKnowledge = await client.deleteMany('knowledge_items', {
+    '_metadata.identity.identifier': userId,
+    '_metadata.tenantId': tenantId
+  });
+
+  // Step 4: Delete from other collections
+  const deletedQuestions = await client.deleteMany('questions', {
+    '_metadata.identity.identifier': userId,
+    '_metadata.tenantId': tenantId
+  });
+
+  // Step 5: Return deletion report
+  return {
+    userId,
+    tenantId,
+    deletedAt: new Date().toISOString(),
+    itemsDeleted: {
+      knowledge: deletedKnowledge,
+      questions: deletedQuestions
+    },
+    total: deletedKnowledge + deletedQuestions,
+    status: 'GDPR_COMPLIANT'
+  };
 }
 
-// Data deletion with audit trail
-await ops.delete(id, expectedOv, 'gdpr-request', 'user-data-deletion');
-// Data is logically deleted but remains in audit trail
+// Usage
+const report = await handleGDPRDeletionRequest('user-123', 'tenant-a');
+console.log(`GDPR Deletion Complete:`, report);
+// Output:
+// {
+//   userId: 'user-123',
+//   tenantId: 'tenant-a',
+//   deletedAt: '2025-01-09T...',
+//   itemsDeleted: { knowledge: 45, questions: 12 },
+//   total: 57,
+//   status: 'GDPR_COMPLIANT'
+// }
 ```
+
+**5. Logical Delete (Audit Trail)**
+
+```typescript
+// Enable logical delete for GDPR compliance with audit trails
+logicalDelete: {
+  enabled: true  // Default - data marked deleted but retained for audit
+}
+
+// Versioning for data lineage
+versioning: {
+  enabled: true  // Default - complete history of all changes
+}
+
+// Delete with audit trail
+await ops.delete(id, expectedOv, userIdentity, 'gdpr-request');
+// Data is logically deleted but history remains for compliance
+```
+
+**6. GDPR Compliance Checklist**
+
+✅ **Identity Attribution**: Track WHO created/modified data  
+✅ **Data Discovery**: Find all data for a user  
+✅ **Bulk Delete**: Delete all user data in one operation  
+✅ **Audit Trails**: Complete history of deletions  
+✅ **Tenant Isolation**: Ensure cross-tenant data safety  
+✅ **30-Day Compliance**: Automated deletion workflow  
+
+#### **Real-World GDPR Scenario**
+
+```typescript
+// Day 1: User requests deletion
+const deletionRequest = {
+  userId: 'user-123',
+  email: 'john@example.com',
+  requestDate: '2025-01-01',
+  reason: 'GDPR Article 17 - Right to be Forgotten'
+};
+
+// Day 2-5: Process deletion
+const report = await handleGDPRDeletionRequest(
+  deletionRequest.userId,
+  'tenant-a'
+);
+
+// Day 6: Verify deletion
+const remainingData = await client.find('knowledge_items', {
+  '_metadata.identity.identifier': deletionRequest.userId
+});
+
+if (remainingData.length === 0) {
+  console.log('✅ GDPR Compliant: All user data deleted');
+} else {
+  console.error('❌ GDPR Violation: Data still exists!');
+}
+
+// Day 30: Deadline - COMPLIANT! ✅
+```
+
+#### **Why XronoxClient is Essential for GDPR**
+
+| Without XronoxClient | With XronoxClient v3.0.1 |
+|---------------------|--------------------------|
+| ❌ Manual deletion per record | ✅ Bulk delete with `deleteMany()` |
+| ❌ Complex query logic | ✅ Simple identity-based queries |
+| ❌ Risk of missing data | ✅ Comprehensive deletion |
+| ❌ Cannot meet 30-day deadline | ✅ Automated compliance |
+| ❌ Legal liability | ✅ GDPR compliant |
+| ❌ Cannot deploy in EU | ✅ EU-ready |
+
+**Legal Protection**: Xronox v3.0.1 provides the technical foundation for GDPR compliance, but legal review is recommended.
 
 ### **SOX Compliance**
 
