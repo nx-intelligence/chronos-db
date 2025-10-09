@@ -580,7 +580,7 @@ export function initXronox(
   }
   
   logger.info('Initializing xronox', {
-    version: '3.0.2',
+    version: '3.1.0',
     databasesCount: Object.keys(finalConfig.databases).length,
     hasSpacesConnections: !!finalConfig.spacesConnections && Object.keys(finalConfig.spacesConnections).length > 0,
     localStorageEnabled: finalConfig.localStorage?.enabled,
@@ -1186,6 +1186,9 @@ export type {
   UpdateOptions,
   DeleteOptions,
 } from './client/XronoxClient.js';
+
+// Re-export ProjectionSpec for convenience
+export type { ProjectionSpec } from './config.js';
 
 // Backwards compatibility alias
 /**

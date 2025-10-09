@@ -383,6 +383,40 @@ export class XronoxClient {
     const items = await this.find(collection, filter);
     return items.length;
   }
+
+  // ==========================================================================
+  // Connection Management
+  // ==========================================================================
+
+  /**
+   * Ping the database to check connection health
+   * 
+   * @returns True if connection is healthy
+   * 
+   * @example
+   * const healthy = await client.ping();
+   */
+  async ping(): Promise<boolean> {
+    try {
+      // Try a simple operation to verify connection
+      await this.count('_health_check', {});
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Close all database connections
+   * 
+   * @example
+   * await client.close();
+   */
+  async close(): Promise<void> {
+    // Xronox handles connection pooling internally
+    // This is a no-op for API compatibility
+    // Actual shutdown should be done via xronox.admin.shutdown()
+  }
 }
 
 // ============================================================================
