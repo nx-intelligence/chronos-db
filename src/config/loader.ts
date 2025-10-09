@@ -97,8 +97,8 @@ export interface LoadConfigOptions {
 }
 
 export interface LoadConfigResult {
-  /** Loaded and resolved configuration */
-  config: XronoxConfig;
+  /** Loaded and resolved configuration (full object with xronox key + any custom properties) */
+  config: XronoxConfig & Record<string, any>;
   /** Path to the config file that was loaded */
   filePath: string;
   /** List of resolved environment variables */
@@ -139,7 +139,7 @@ export function loadConfigFromFile(
     throw new XronoxConfigParseError(filePath, error as Error);
   }
 
-  // 3. Validate structure (must have "xronox" key)
+  // 3. Validate structure
   if (!rawConfig || typeof rawConfig !== 'object') {
     throw new XronoxConfigStructureError(
       filePath,
@@ -147,37 +147,47 @@ export function loadConfigFromFile(
     );
   }
 
-  if (!rawConfig.xronox) {
-    throw new XronoxConfigStructureError(
-      filePath,
-      'Config file must have a top-level "xronox" key containing the configuration'
-    );
-  }
-
-  // 4. Resolve ENV tokens
+  // 4. Resolve ENV tokens in the ENTIRE config (not just xronox key)
   const envOptions: EnvResolutionOptions = options.verbose 
     ? { filePath, verbose: true }
     : { filePath };
 
   const { config: resolvedConfig, resolvedVars, warnings } = resolveEnvTokens(
-    rawConfig.xronox,
+    rawConfig,
     envOptions,
-    '$.xronox'
+    '$'
   );
 
-  // 5. Log summary
+  // 5. Extract xronox config for validation, but preserve full object
+  let xronoxConfig: any;
+  let fullConfig: any;
+
+  if (resolvedConfig.xronox) {
+    // New format: { xronox: { ... }, customKey: { ... } }
+    xronoxConfig = resolvedConfig.xronox;
+    fullConfig = resolvedConfig;
+  } else {
+    // Legacy format: { dbConnections: { ... }, databases: { ... } }
+    xronoxConfig = resolvedConfig;
+    fullConfig = { xronox: resolvedConfig };
+  }
+
+  // 6. Log summary
   logger.info('Xronox configuration loaded successfully', {
     filePath,
     resolvedEnvVars: resolvedVars.length,
     warnings: warnings.length,
+    hasCustomProperties: Object.keys(fullConfig).filter(k => k !== 'xronox').length > 0,
   });
 
   if (warnings.length > 0 && options.verbose) {
     warnings.forEach(warning => logger.warn(warning));
   }
 
+  // Return the full config object (xronox + any custom properties)
+  // This allows users to access both xronoxConfig.xronox and xronoxConfig.customProperty
   return {
-    config: resolvedConfig as XronoxConfig,
+    config: { ...xronoxConfig, ...fullConfig } as XronoxConfig & Record<string, any>,
     filePath,
     resolvedVars,
     warnings,

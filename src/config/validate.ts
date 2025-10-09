@@ -341,13 +341,23 @@ export const XronoxConfigSchema = z.object({
   if (cfg.databases.runtime) {
     cfg.databases.runtime.tenantDatabases.forEach((db: any) => {
       allDbConnRefs.add(db.dbConnRef);
-      allSpaceConnRefs.add(db.spaceConnRef);
+      if (db.spaceConnRef) allSpaceConnRefs.add(db.spaceConnRef); // Optional for runtime
     });
   }
   
   if (cfg.databases.logs) {
     allDbConnRefs.add(cfg.databases.logs.dbConnRef);
-    allSpaceConnRefs.add(cfg.databases.logs.spaceConnRef);
+    if (cfg.databases.logs.spaceConnRef) allSpaceConnRefs.add(cfg.databases.logs.spaceConnRef); // Optional for logs
+  }
+  
+  if (cfg.databases.messaging) {
+    allDbConnRefs.add(cfg.databases.messaging.dbConnRef);
+    if (cfg.databases.messaging.spaceConnRef) allSpaceConnRefs.add(cfg.databases.messaging.spaceConnRef); // Optional for messaging
+  }
+  
+  if (cfg.databases.identities) {
+    allDbConnRefs.add(cfg.databases.identities.dbConnRef);
+    if (cfg.databases.identities.spaceConnRef) allSpaceConnRefs.add(cfg.databases.identities.spaceConnRef); // Optional for identities
   }
   
   // Check that all referenced connections exist
