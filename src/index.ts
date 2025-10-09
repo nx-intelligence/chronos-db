@@ -580,7 +580,7 @@ export function initXronox(
   }
   
   logger.info('Initializing xronox', {
-    version: '3.0.0',
+    version: '3.0.1',
     databasesCount: Object.keys(finalConfig.databases).length,
     hasSpacesConnections: !!finalConfig.spacesConnections && Object.keys(finalConfig.spacesConnections).length > 0,
     localStorageEnabled: finalConfig.localStorage?.enabled,
@@ -1175,6 +1175,17 @@ export {
   identityToString,
   parseIdentityString,
 } from './types/identity.js';
+
+// XronoxClient (MongoDB-like API)
+export { XronoxClient, createXronoxClient } from './client/XronoxClient.js';
+export type {
+  XronoxClientConfig,
+  InsertOptions,
+  FindOneOptions,
+  FindOptions,
+  UpdateOptions,
+  DeleteOptions,
+} from './client/XronoxClient.js';
 
 // Backwards compatibility alias
 /**
