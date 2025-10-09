@@ -580,7 +580,7 @@ export function initXronox(
   }
   
   logger.info('Initializing xronox', {
-    version: '2.9.0',
+    version: '2.10.0',
     databasesCount: Object.keys(finalConfig.databases).length,
     hasSpacesConnections: !!finalConfig.spacesConnections && Object.keys(finalConfig.spacesConnections).length > 0,
     localStorageEnabled: finalConfig.localStorage?.enabled,
@@ -609,6 +609,7 @@ export function initXronox(
     ...(validatedConfig.localStorage && { localStorage: validatedConfig.localStorage }),
     hashAlgo: validatedConfig.routing.hashAlgo,
     chooseKey: validatedConfig.routing.chooseKey ?? 'tenantId|dbName|collection:objectId',
+    config: validatedConfig, // Pass full config for projection and other features
   });
   logger.debug('BridgeRouter initialized successfully');
 

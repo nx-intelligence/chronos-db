@@ -344,6 +344,16 @@ export interface S3OffloadConfig {
 /**
  * Collection map configuration
  */
+/**
+ * Projection specification for field filtering
+ */
+export interface ProjectionSpec {
+  /** Fields to include ('*' for all, or array of field names) */
+  include: '*' | string[];
+  /** Fields to exclude (applied after include) */
+  exclude?: string[];
+}
+
 export interface CollectionMap {
   /** Properties to index */
   indexedProps: string[];
@@ -363,6 +373,28 @@ export interface CollectionMap {
   };
   /** S3 offload configuration for automatic archival */
   s3Offload?: S3OffloadConfig;
+  
+  /**
+   * Fields hidden by default (not returned in queries unless explicitly requested)
+   * Similar to hidden files in operating systems - useful for metadata fields
+   * @example ['_metadata', '_internal']
+   */
+  hiddenFields?: string[];
+  
+  /**
+   * Named projection configurations for field filtering
+   * Define common projections that can be referenced by name in queries
+   * @example
+   * {
+   *   default: { include: '*', exclude: ['_metadata'] },
+   *   minimal: { include: ['id', 'name', 'email'] },
+   *   withMetadata: { include: '*' }
+   * }
+   */
+  projection?: {
+    default?: ProjectionSpec;
+    [key: string]: ProjectionSpec | undefined;
+  };
 }
 
 /**

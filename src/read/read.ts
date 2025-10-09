@@ -6,6 +6,8 @@ import { BridgeRouter } from '../router/router.js';
 import { Repos } from '../db/repos.js';
 import type { StorageAdapter } from '../storage/interface.js';
 import type { HeadDoc, VerDoc } from '../db/schemas.js';
+import type { ProjectionSpec } from '../config.js';
+import { resolveProjectionSpec, applyProjection } from '../util/projection.js';
 import { logger } from '../utils/logger.js';
 
 // ============================================================================
@@ -40,6 +42,20 @@ export interface ReadOptions extends PresignOptions {
   preferShadow?: boolean;        // use dev shadow if available (latest only)
   ov?: number;                   // exact object version (historical read - EXPLICIT)
   at?: Date | string;            // ISO 8601; version at/before this time (historical read - EXPLICIT)
+  
+  /**
+   * Include hidden fields (default: false)
+   * When true, fields marked as hiddenFields in collectionMap will be included
+   * @example includeHidden: true // Include _metadata field
+   */
+  includeHidden?: boolean;
+  
+  /**
+   * Named projection or custom projection spec
+   * @example projectionSpec: 'minimal' // Use named projection from collectionMap
+   * @example projectionSpec: { include: ['id', 'name'], exclude: [] }
+   */
+  projectionSpec?: string | ProjectionSpec;
 }
 
 export interface QueryOptions extends PresignOptions {
@@ -50,6 +66,20 @@ export interface QueryOptions extends PresignOptions {
   limit?: number;                // default 50, max 1000
   sort?: Array<{ field: string; dir: 1 | -1 }>; // fields limited to meta/indexed/system
   pageToken?: string;            // opaque pagination cursor
+  
+  /**
+   * Include hidden fields (default: false)
+   * When true, fields marked as hiddenFields in collectionMap will be included
+   * @example includeHidden: true // Include _metadata field
+   */
+  includeHidden?: boolean;
+  
+  /**
+   * Named projection or custom projection spec
+   * @example projectionSpec: 'minimal' // Use named projection from collectionMap
+   * @example projectionSpec: { include: ['id', 'name'], exclude: [] }
+   */
+  projectionSpec?: string | ProjectionSpec;
 }
 
 export interface MetaFilter {
@@ -124,7 +154,7 @@ export async function getItem(
     if (!verDoc) {
       return null;
     }
-    return await hydrateItemViewFromVersion(storage, spaces, verDoc, opts);
+    return await hydrateItemViewFromVersion(router, storage, spaces, verDoc, ctx.collection, opts);
   }
 
   // 2. If at is provided → return version at/before that time
@@ -140,7 +170,7 @@ export async function getItem(
     if (!latestVer) {
       return null;
     }
-    return await hydrateItemViewFromVersion(storage, spaces, latestVer, opts);
+    return await hydrateItemViewFromVersion(router, storage, spaces, latestVer, ctx.collection, opts);
   }
 
   // 3. Default → return latest from _head
@@ -156,7 +186,7 @@ export async function getItem(
     return null;
   }
 
-  return await hydrateItemView(storage, spaces, head, opts);
+  return await hydrateItemView(router, storage, spaces, head, ctx.collection, opts);
 }
 
 /**
@@ -254,7 +284,7 @@ export async function query(
       continue;
     }
 
-    const itemView = await hydrateItemView(storage, spaces, head, opts);
+    const itemView = await hydrateItemView(router, storage, spaces, head, ctx.collection, opts);
     if (itemView) {
       items.push(itemView);
       lastId = head._id.toString();
@@ -292,8 +322,8 @@ export async function listByMeta(
  * Query as of a specific time (from _ver collection)
  */
 async function queryAsOfTime(
-  _router: BridgeRouter,
-  _ctx: ReadContext,
+  router: BridgeRouter,
+  ctx: ReadContext,
   safeFilter: Record<string, any>,
   opts: QueryOptions,
   storage: StorageAdapter,
@@ -334,7 +364,7 @@ async function queryAsOfTime(
       continue;
     }
 
-    const itemView = await hydrateItemViewFromVersion(storage, spaces, ver, opts);
+    const itemView = await hydrateItemViewFromVersion(router, storage, spaces, ver, ctx.collection, opts);
     if (itemView) {
       items.push(itemView);
       lastId = ver.itemId.toString();
@@ -355,16 +385,31 @@ async function queryAsOfTime(
  * Hydrate item view from head document
  */
 async function hydrateItemView(
+  router: BridgeRouter,
   storage: StorageAdapter,
   _spaces: any,
   head: HeadDoc,
+  collection: string,
   opts: ReadOptions
 ): Promise<ItemView> {
   // Fetch item.json from storage
   const item = await storage.getJSON(head.jsonBucket, head.jsonKey);
   
-  // Apply projection if specified
-  const projectedItem = opts.projection ? projectFields(item, opts.projection) : item;
+  // Apply legacy projection if specified (backwards compatibility)
+  let projectedItem = opts.projection ? projectFields(item, opts.projection) : item;
+  
+  // Apply new projection system (hiddenFields + projectionSpec)
+  if (opts.projectionSpec || opts.includeHidden !== undefined) {
+    const projectionOptions: { includeHidden?: boolean; projectionSpec?: string | ProjectionSpec } = {};
+    if (opts.includeHidden !== undefined) {
+      projectionOptions.includeHidden = opts.includeHidden;
+    }
+    if (opts.projectionSpec !== undefined) {
+      projectionOptions.projectionSpec = opts.projectionSpec;
+    }
+    const projectionSpec = resolveProjectionSpec(collection, router.getConfig(), projectionOptions);
+    projectedItem = applyProjection(projectedItem, projectionSpec);
+  }
   
   // Generate presigned URLs if requested
   const presigned = opts.presign ? await generatePresignedUrls(storage, projectedItem, opts) : undefined;
@@ -394,16 +439,31 @@ async function hydrateItemView(
  * Hydrate item view from version document
  */
 async function hydrateItemViewFromVersion(
+  router: BridgeRouter,
   storage: StorageAdapter,
   _spaces: any,
   verDoc: VerDoc,
+  collection: string,
   opts: ReadOptions
 ): Promise<ItemView> {
   // Fetch item.json from storage
   const item = await storage.getJSON(verDoc.jsonBucket, verDoc.jsonKey);
   
-  // Apply projection if specified
-  const projectedItem = opts.projection ? projectFields(item, opts.projection) : item;
+  // Apply legacy projection if specified (backwards compatibility)
+  let projectedItem = opts.projection ? projectFields(item, opts.projection) : item;
+  
+  // Apply new projection system (hiddenFields + projectionSpec)
+  if (opts.projectionSpec || opts.includeHidden !== undefined) {
+    const projectionOptions: { includeHidden?: boolean; projectionSpec?: string | ProjectionSpec } = {};
+    if (opts.includeHidden !== undefined) {
+      projectionOptions.includeHidden = opts.includeHidden;
+    }
+    if (opts.projectionSpec !== undefined) {
+      projectionOptions.projectionSpec = opts.projectionSpec;
+    }
+    const projectionSpec = resolveProjectionSpec(collection, router.getConfig(), projectionOptions);
+    projectedItem = applyProjection(projectedItem, projectionSpec);
+  }
   
   // Generate presigned URLs if requested
   const presigned = opts.presign ? await generatePresignedUrls(storage, projectedItem, opts) : undefined;

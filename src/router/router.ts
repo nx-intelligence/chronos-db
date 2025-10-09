@@ -14,7 +14,8 @@ import type {
   MessagingDatabase,
   IdentitiesDatabase,
   LocalStorageConfig,
-  RouteContext
+  RouteContext,
+  XronoxConfig
 } from '../config.js';
 import { LocalStorageAdapter } from '../storage/localStorage.js';
 import { S3StorageAdapter } from '../storage/s3Adapter.js';
@@ -79,6 +80,7 @@ export interface RouterInitArgs {
   localStorage?: LocalStorageConfig | undefined;
   hashAlgo?: 'rendezvous' | 'jump';
   chooseKey?: string | ((ctx: RouteContext) => string);
+  config?: XronoxConfig; // Full config for projection and other advanced features
 }
 
 export interface BackendInfo {
@@ -123,6 +125,7 @@ export class BridgeRouter {
     messaging?: MessagingDatabase;
     identities?: IdentitiesDatabase;
   };
+  private readonly config?: XronoxConfig; // Full config for projection and other features
   
   // Connection pools (lazy initialization)
   private mongoClients: Map<number, MongoClient> = new Map();
@@ -154,6 +157,9 @@ export class BridgeRouter {
     this.hashAlgo = args.hashAlgo ?? 'rendezvous';
     this.chooseKey = args.chooseKey ?? 'tenantId|dbName|collection:objectId';
     this.databases = args.databases;
+    if (args.config) {
+      this.config = args.config;
+    }
     
     // Initialize dynamic tenant resolver
     const maxCacheSize = 10000; // TODO: Make configurable
@@ -856,6 +862,16 @@ export class BridgeRouter {
       hash = hash & hash; // Convert to 32-bit integer
     }
     return Math.abs(hash);
+  }
+
+  /**
+   * Get the full configuration (for projection and other features)
+   */
+  public getConfig(): XronoxConfig {
+    if (!this.config) {
+      throw new Error('Full configuration not available. Pass config to RouterInitArgs for advanced features like projection.');
+    }
+    return this.config;
   }
 
   /**
